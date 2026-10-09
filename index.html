@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cut,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Palabras">
+<meta name="theme-color" content="#14181f">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="style.css">
+<title>Palabras</title>
+</head>
+<body>
+<header id="top">
+  <h1>Pala<span>bras</span></h1>
+  <nav>
+    <button data-v="play" class="on">Oyna</button>
+    <button data-v="cards">Kartlar</button>
+    <button data-v="words">Kelimeler</button>
+    <button data-v="settings" aria-label="Ayarlar">⚙︎</button>
+  </nav>
+</header>
+
+<main>
+  <!-- OYUN MENÜSÜ -->
+  <section class="view on" id="v-play">
+    <div class="scroll">
+      <div class="stats">
+        <div class="stat"><b id="st-total">0</b><small>Kelime</small></div>
+        <div class="stat"><b id="st-due">0</b><small>Bugün tekrar</small></div>
+        <div class="stat"><b id="st-known">0</b><small>Öğrenilmiş</small></div>
+      </div>
+      <h2 class="sec">Süreli oyun</h2>
+      <div class="timed">
+        <button class="tile" data-timed="60"><b>1 dk</b><small>Rekor <span data-rec="60">–</span></small></button>
+        <button class="tile" data-timed="180"><b>3 dk</b><small>Rekor <span data-rec="180">–</span></small></button>
+        <button class="tile" data-timed="300"><b>5 dk</b><small>Rekor <span data-rec="300">–</span></small></button>
+      </div>
+      <h2 class="sec">Çalışma</h2>
+      <button class="row-btn" id="go-train">
+        <span><b>Antrenman</b><small>20 kelime · önce tekrarı gelenler ve yeniler</small></span><i>›</i>
+      </button>
+      <p class="note" id="play-empty" hidden>Henüz kelime yok. ⚙︎ Ayarlar → CSV dosyası seç.</p>
+
+      <h2 class="sec">Hatalarım</h2>
+      <div class="panel mist-panel">
+        <button class="mist-play" id="go-mist">Hatalarımı çalış <span id="mist-count">0</span></button>
+        <div id="mist-list"></div>
+        <button class="btn" id="mist-more" hidden></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- OYUN EKRANI -->
+  <section class="view" id="v-game">
+    <div class="gbar">
+      <button class="x" id="g-quit" aria-label="Çık">✕</button>
+      <div class="gmid">
+        <div class="time" id="g-time"></div>
+        <div class="prog" id="g-prog"><i></i></div>
+      </div>
+      <div class="score"><b id="g-score">0</b><small id="g-combo"></small></div>
+    </div>
+    <div class="board" id="board"></div>
+    <div class="count" id="g-count" hidden></div>
+  </section>
+
+  <!-- SONUÇ -->
+  <section class="view" id="v-result">
+    <div class="scroll">
+      <div class="result">
+        <div class="r-title" id="r-title"></div>
+        <div class="r-big" id="r-big"></div>
+        <div class="r-sub" id="r-sub"></div>
+      </div>
+      <button class="big" id="r-again">Tekrar oyna</button>
+      <button class="btn" id="r-menu">Menüye dön</button>
+    </div>
+  </section>
+
+  <!-- KART MODU -->
+  <section class="view" id="v-cards">
+    <div class="stats">
+      <div class="stat"><b id="c-due">0</b><small>Tekrar</small></div>
+      <div class="stat"><b id="c-new">0</b><small>Yeni (bugün)</small></div>
+    </div>
+    <div class="fcard" id="fcard">
+      <div class="u" id="fc-unit"></div>
+      <button class="speak" id="fc-speak" aria-label="Seslendir">🔊</button>
+      <div class="q" id="fc-q"></div>
+      <div class="tag" id="fc-tag"></div>
+      <div class="a" id="fc-a"></div>
+      <div class="h" id="fc-h"></div>
+      <div class="dir" id="fc-dir"></div>
+    </div>
+    <button class="big" id="fc-show">Cevabı göster</button>
+    <div class="grades" id="fc-grade" hidden>
+      <button class="again" data-g="0">Bilmedim</button>
+      <button class="hard" data-g="1">Zor</button>
+      <button class="good" data-g="2">İyi</button>
+      <button class="easy" data-g="3">Kolay</button>
+    </div>
+  </section>
+
+  <!-- KELİMELER -->
+  <section class="view" id="v-words">
+    <input id="search" placeholder="Ara (İspanyolca ya da Türkçe)" autocomplete="off" autocapitalize="off">
+    <div class="chips">
+      <button class="chip on" data-f="all">Tümü</button>
+      <button class="chip" data-f="mist">Hatalarım</button>
+      <button class="chip" data-f="new">Görülmemiş</button>
+    </div>
+    <div id="list"></div>
+  </section>
+
+  <!-- AYARLAR -->
+  <section class="view" id="v-settings">
+    <div class="scroll">
+      <div class="panel">
+        <h2>Kelime ekle</h2>
+        <label class="btn" for="f-csv">CSV dosyası seç</label>
+        <input type="file" id="f-csv" accept=".csv,.txt,text/csv,text/plain">
+        <p class="note">Duolingo script'inin ürettiği front,back,hint dosyası. Mevcut kelimelerin ilerlemesi korunur, sadece yeniler eklenir.</p>
+        <p class="note" id="m-import"></p>
+      </div>
+      <div class="panel">
+        <h2>Tercihler</h2>
+        <div class="row"><label for="o-sec">Kelime havuzu</label><select id="o-sec"></select></div>
+        <div class="row"><label for="o-new">Günlük yeni kelime</label><input type="number" id="o-new" min="0" max="500"></div>
+        <div class="row"><label for="o-dir">Kart yönü</label>
+          <select id="o-dir">
+            <option value="es">İspanyolca → Türkçe</option>
+            <option value="tr">Türkçe → İspanyolca</option>
+            <option value="mix">Karışık</option>
+          </select></div>
+        <div class="row"><label for="o-tts">Dokununca seslendir</label>
+          <select id="o-tts"><option value="1">Açık</option><option value="0">Kapalı</option></select></div>
+        <div class="row"><label for="o-tags">Kelime türü etiketi</label>
+          <select id="o-tags"><option value="1">Göster</option><option value="0">Gizle</option></select></div>
+      </div>
+      <div class="panel">
+        <h2>Etiketler</h2>
+        <div class="legend">
+          <span><b>m.</b> sustantivo masculino</span>
+          <span><b>f.</b> sustantivo femenino</span>
+          <span><b>m./f.</b> her iki cinsiyet</span>
+          <span><b>pl.</b> plural (çoğul)</span>
+          <span><b>adj.</b> adjetivo</span>
+          <span><b>v.</b> verbo (parantezde mastar)</span>
+          <span><b>v. prnl.</b> verbo pronominal (-se)</span>
+          <span><b>part.</b> participio</span>
+          <span><b>adv.</b> adverbio</span>
+          <span><b>prep.</b> preposición</span>
+          <span><b>conj.</b> conjunción</span>
+          <span><b>pron.</b> pronombre</span>
+          <span><b>det.</b> determinante</span>
+          <span><b>art.</b> artículo</span>
+          <span><b>contr.</b> contracción</span>
+          <span><b>num.</b> numeral</span>
+          <span><b>interr.</b> interrogativo</span>
+          <span><b>interj.</b> interjección</span>
+          <span><b>loc.</b> locución (kalıp ifade)</span>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Yedek</h2>
+        <button class="btn" id="b-export">Yedeği indir (JSON)</button>
+        <label class="btn" for="f-backup">Yedekten geri yükle</label>
+        <input type="file" id="f-backup" accept=".json,application/json">
+        <button class="btn danger" id="b-reset">Her şeyi sil</button>
+        <p class="note" id="m-backup"></p>
+      </div>
+    </div>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
