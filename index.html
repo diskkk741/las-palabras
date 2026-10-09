@@ -16,13 +16,13 @@
 <body>
 <header id="top">
   <h1>Pala<span>bras</span></h1>
-  <nav>
-    <button data-v="play" class="on">Oyna</button>
-    <button data-v="cards">Kartlar</button>
-    <button data-v="words">Kelimeler</button>
-    <button data-v="settings" aria-label="Ayarlar">⚙︎</button>
-  </nav>
 </header>
+<nav id="tabs">
+  <button data-v="play" class="on"><i>🎯</i>Oyna</button>
+  <button data-v="cards"><i>🃏</i>Kartlar</button>
+  <button data-v="words"><i>📖</i>Kelimeler</button>
+  <button data-v="settings"><i>⚙︎</i>Ayarlar</button>
+</nav>
 
 <main>
   <!-- OYUN MENÜSÜ -->
@@ -64,7 +64,7 @@
       </div>
       <div class="score"><b id="g-score">0</b><small id="g-combo"></small></div>
     </div>
-    <div class="board" id="board"></div>
+    <div class="board-wrap"><div class="board" id="board"></div></div>
     <div class="count" id="g-count" hidden></div>
   </section>
 
