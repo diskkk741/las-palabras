@@ -1,6 +1,6 @@
 // Basit önbellek: uygulama internetsiz de açılır.
 // Dosyaları güncellediğinde VERSION'ı artır ki telefona yeni sürüm gelsin.
-const VERSION = 'palabras-v3';
+const VERSION = 'palabras-v4';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'tags.json', 'manifest.webmanifest',
   'icon-180.png', 'icon-192.png', 'icon-512.png'];
 

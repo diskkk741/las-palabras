@@ -220,7 +220,7 @@ function startGame(mode, secs) {
 function buildTrainDeck(p) {
   const due = shuffle(p.filter(c => isDue(c) && !c.mist));
   const mist = shuffle(p.filter(c => c.mist));
-  const fresh = p.filter(c => !c.seen).sort((a, b) => a.order - b.order).slice(0, 8);
+  const fresh = shuffle(p.filter(c => !c.seen)).slice(0, 8);
   let picks = [...mist.slice(0, 6), ...due, ...fresh];
   picks = [...new Map(picks.map(c => [c.es, c])).values()].slice(0, TRAIN_SIZE);
   if (picks.length < TRAIN_SIZE) {                // eksikse en zayıf kutulardan tamamla
@@ -459,8 +459,9 @@ let F = { q: [], cur: null, dir: 'es', shown: false };
 function fcStart() {
   const p = pool();
   const due = shuffle(p.filter(isDue));
-  const fresh = p.filter(c => !c.seen).sort((a, b) => a.order - b.order).slice(0, newLeft());
-  F.q = [...due, ...fresh];
+  // kelimeler Duolingo'da zaten öğrenildiği için yeniler rastgele seçilir; tekrarlar ve yeniler karışık gelir
+  const fresh = shuffle(p.filter(c => !c.seen)).slice(0, newLeft());
+  F.q = shuffle([...due, ...fresh]);
   fcStats(); fcNext();
 }
 function fcStats() { $('c-due').textContent = F.q.filter(c => c.seen).length + (F.cur && F.cur.seen ? 1 : 0); $('c-new').textContent = F.q.filter(c => !c.seen).length + (F.cur && !F.cur.seen ? 1 : 0); }
