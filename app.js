@@ -37,8 +37,20 @@ function save() {
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
 /* ---------------- etiketler ---------------- */
+// GitHub Pages'te çalışırken veri dosyaları raw.githubusercontent.com'dan alınır:
+// pazartesi botunun commit'lediği son hal, Pages'in yeniden yayınlanmasını beklemeden gelir.
+const RAW_BASE = (() => {
+  const m = location.hostname.match(/^([^.]+)\.github\.io$/);
+  const repo = location.pathname.split('/').filter(Boolean)[0];
+  return m && repo ? `https://raw.githubusercontent.com/${m[1]}/${repo}/main/` : '';
+})();
 let TAGS = {};
-fetch('tags.json').then(r => r.ok ? r.json() : {}).then(t => { TAGS = t || {}; refreshAll(); }).catch(() => {});
+async function loadTags() {
+  for (const url of [RAW_BASE && RAW_BASE + 'tags.json?t=' + Date.now(), 'tags.json'].filter(Boolean)) {
+    try { const r = await fetch(url, { cache: 'no-store' }); if (r.ok) { TAGS = await r.json(); refreshAll(); return; } } catch {}
+  }
+}
+loadTags();
 
 function guessTag(es) {
   const w = es.toLowerCase();
@@ -661,11 +673,7 @@ $('b-reset').onclick = () => {
    (ve uzun süre arka planda kaldıktan sonra) bu dosyayı okuyup yeni kelimeleri ekler.
    GitHub Pages'te çalışırken dosya raw.githubusercontent.com'dan alınır: Pages
    yeniden yayınlanmayı beklemeden her zaman repodaki son hali gelir. */
-const SYNC_URL = (() => {
-  const m = location.hostname.match(/^([^.]+)\.github\.io$/);
-  const repo = location.pathname.split('/').filter(Boolean)[0];
-  return m && repo ? `https://raw.githubusercontent.com/${m[1]}/${repo}/main/words.json` : 'words.json';
-})();
+const SYNC_URL = RAW_BASE ? RAW_BASE + 'words.json' : 'words.json';
 const SYNC_EVERY = 6 * 3600 * 1000;
 
 function toast(msg) {
@@ -714,7 +722,7 @@ async function autoSync(manual) {
       const res = importWords(d.words);
       db.sync = { updated: d.updated, count: d.words.length, lastUnit: d.lastUnit || null };
       save();
-      if (res.added) toast(`${res.added} yeni kelime eklendi 🎉`);
+      if (res.added) { toast(`${res.added} yeni kelime eklendi 🎉`); loadTags(); }
       else if (manual) toast('Yeni kelime yok, liste güncel.');
       refreshAll();
     } else { save(); if (manual) toast('Yeni kelime yok, liste güncel.'); }
