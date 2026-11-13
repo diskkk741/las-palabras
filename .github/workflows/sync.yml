@@ -2,11 +2,12 @@ name: Duolingo kelime senkronu
 
 on:
   schedule:
-    - cron: '0 5 * * 1'      # her pazartesi 08:00 (Türkiye saati)
-  workflow_dispatch:
+    - cron: '0 5 * * 1'      # her pazartesi 08:00 (Türkiye saati, UTC+3)
+  workflow_dispatch:         # Actions sekmesinden "Run workflow" ile elle de çalışır
 
 permissions:
-  contents: write
+  contents: write            # words.json ve tags.json'u commit'lemek için
+  models: read               # GitHub Models (ücretsiz yapay zekâ) ile etiketleme için
 
 concurrency:
   group: duolingo-sync
@@ -15,27 +16,33 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Duolingo'dan kelimeleri çek
         run: node scripts/sync.mjs
         env:
           DUO_JWT: ${{ secrets.DUO_JWT }}
 
+      - name: Yeni kelimeleri etiketle (tür, mastar, Türkçe karşılık)
+        continue-on-error: true
+        run: node scripts/tag.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Değişiklik varsa commit'le
         run: |
-          if git diff --quiet -- words.json && git ls-files --error-unmatch words.json >/dev/null 2>&1; then
-            echo "Yeni kelime yok."
+          git add words.json tags.json
+          if git diff --cached --quiet; then
+            echo "Değişiklik yok."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add words.json
           git commit -m "Kelime listesi güncellendi ($(date -u +%Y-%m-%d))"
           git push
