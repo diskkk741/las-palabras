@@ -6,8 +6,8 @@ on:
   workflow_dispatch:         # Actions sekmesinden "Run workflow" ile elle de çalışır
 
 permissions:
-  contents: write            # words.json ve tags.json'u commit'lemek için
-  models: read               # GitHub Models (ücretsiz yapay zekâ) ile etiketleme için
+  contents: write            # words.json, tags.json, examples.json, conj.json'u commit'lemek için
+  models: read               # GitHub Models (ücretsiz yapay zekâ) ile etiketleme / örnek cümle için
 
 concurrency:
   group: duolingo-sync
@@ -16,7 +16,7 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
 
@@ -24,20 +24,32 @@ jobs:
         with:
           node-version: 22
 
-      - name: Duolingo'dan kelimeleri çek
+      - name: Duolingo'dan kelimeleri çek (artımlı; ayın ilk pazartesisi tam tarama)
         run: node scripts/sync.mjs
         env:
           DUO_JWT: ${{ secrets.DUO_JWT }}
 
-      - name: Yeni kelimeleri etiketle (tür, mastar, Türkçe karşılık)
+      - name: Yeni kelimeleri etiketle + örnek cümleler
         continue-on-error: true
         run: node scripts/tag.mjs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Yeni fiillerin çekim tablosu
+        continue-on-error: true
+        run: |
+          pip install --quiet verbecc
+          python scripts/conj.py
+
       - name: Değişiklik varsa commit'le
         run: |
           git add words.json tags.json
+          [ -f examples.json ] && git add examples.json
+          [ -f conj.json ] && git add conj.json
           if git diff --cached --quiet; then
             echo "Değişiklik yok."
             exit 0
