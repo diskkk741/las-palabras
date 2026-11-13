@@ -17,7 +17,7 @@ const norm = s => s.toLocaleLowerCase('tr').trim();
 /* ---------------- veri ---------------- */
 const blank = () => ({
   cards: {},
-  opts: { section: 'all', newPerDay: 20, dir: 'es', tts: '1', tags: '1' },
+  opts: { section: 'all', newPerDay: 20, dir: 'es', tts: '1', tags: '1', art: '1' },
   day: { date: '', newSeen: 0 },
   records: {},
   games: 0,
@@ -29,11 +29,46 @@ function load() {
   db.opts = Object.assign(b.opts, db.opts || {});
   db.day = db.day || b.day; db.records = db.records || {}; db.cards = db.cards || {};
   db.nums = db.nums || {};
+  db.listen = db.listen || {}; db.conj = db.conj || {};
+  db.stats = db.stats || {};
 }
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(db)); }
   catch { alert('Kaydedilemedi: depolama dolu olabilir. Ayarlar → Yedeği indir.'); }
+  if (typeof window.onSaved === 'function') window.onSaved();   // bulut yedeği (modes.js)
 }
+
+/* ---------------- istatistik ----------------
+   Gün başına doğru cevap sayısı, cihaz bazında (bulut yedeğinde cihazlar toplanır). */
+const DEVICE = (() => { try { let d = localStorage.getItem('palabras.device'); if (!d) { d = Math.random().toString(36).slice(2, 10); localStorage.setItem('palabras.device', d); } return d; } catch { return 'local'; } })();
+function bump(n = 1) {
+  const day = todayStr();
+  const s = (db.stats[DEVICE] = db.stats[DEVICE] || {});
+  s[day] = (s[day] || 0) + n;
+}
+function dayTotal(day) { let n = 0; for (const dev of Object.values(db.stats)) n += dev[day] || 0; return n; }
+function dayStr(offset) { const d = new Date(); d.setDate(d.getDate() - offset); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; }
+function streak() {
+  let n = 0, i = dayTotal(dayStr(0)) ? 0 : 1;      // bugün henüz oynamadıysan seri dünden sayılır
+  while (dayTotal(dayStr(i)) > 0) { n++; i++; }
+  return n;
+}
+function weekTotal() { let n = 0; for (let i = 0; i < 7; i++) n += dayTotal(dayStr(i)); return n; }
+
+/* ---------------- artikel ---------------- */
+const EL_FEM = new Set(['agua', 'aula', 'arma', 'hambre', 'águila', 'alma', 'área', 'hacha', 'ala', 'ancla', 'agua mineral']);
+const NO_ART = new Set(['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre', 'costa rica']);
+function articleOf(c) {
+  if (c.num || db.opts.art !== '1' || NO_ART.has(c.es) || /^[A-ZÁÉÍÓÚÑ]/.test(c.es) || /^(el|la|los|las|un|una) /.test(c.es)) return '';
+  const t = TAGS[c.es] ? TAGS[c.es].t : '';
+  if (t === 'm.') return 'el';
+  if (t === 'f.') return EL_FEM.has(c.es) ? 'el' : 'la';
+  if (t === 'm. pl.') return 'los';
+  if (t === 'f. pl.') return 'las';
+  if (t === 'm./f.') return 'el/la';
+  return '';
+}
+const disp = c => { const a = articleOf(c); return a ? `${a} ${c.es}` : c.es; };
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
 /* ---------------- etiketler ---------------- */
@@ -51,6 +86,14 @@ async function loadTags() {
   }
 }
 loadTags();
+// örnek cümleler (pazartesi botu üretir): { kelime: [ispanyolca cümle, türkçesi] }
+let EX = {};
+async function loadExamples() {
+  for (const url of [RAW_BASE && RAW_BASE + 'examples.json?t=' + Date.now(), 'examples.json'].filter(Boolean)) {
+    try { const r = await fetch(url, { cache: 'no-store' }); if (r.ok) { EX = await r.json(); return; } } catch {}
+  }
+}
+loadExamples();
 
 function guessTag(es) {
   const w = es.toLowerCase();
@@ -86,12 +129,32 @@ function numEs(n) {
   return u ? `${ES_TENS[t]} y ${ES_1_29[u]}` : ES_TENS[t];
 }
 const NUM_LIST = [...Array.from({ length: 100 }, (_, i) => i + 1), 200, 300, 400, 500, 600, 700, 800, 900, 1000];
-function ensureNums() {
-  NUM_LIST.forEach((n, i) => {
-    const es = numEs(n);
-    if (!db.nums[es]) db.nums[es] = { es, tr: String(n), num: true, box: 0, due: 0, seen: false, wrong: 0, mist: false, mstreak: 0, order: i };
-  });
+const MONTHS_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const MONTHS_TR = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+const MONTH_DAYS = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+const ORDINALS = ['primero', 'segundo', 'tercero', 'cuarto', 'quinto', 'sexto', 'séptimo', 'octavo', 'noveno', 'décimo'];
+const hourEs = h => h === 1 ? 'la una' : 'las ' + numEs(h);
+function timeEs(h, m) {
+  if (m === 0) return `${hourEs(h)} en punto`;
+  if (m <= 30) return `${hourEs(h)} y ${m === 15 ? 'cuarto' : m === 30 ? 'media' : numEs(m)}`;
+  const nh = h === 12 ? 1 : h + 1, r = 60 - m;
+  return `${hourEs(nh)} menos ${r === 15 ? 'cuarto' : numEs(r)}`;
 }
+// db.nums: sayılar (kind yok/'num'), saatler ('time'), sıra sayıları ('ord'), tarihler ('date')
+function numEntry(es, tr, kind, order) {
+  if (!db.nums[es]) db.nums[es] = { es, tr, num: true, kind, box: 0, due: 0, seen: false, wrong: 0, mist: false, mstreak: 0, order };
+  else if (!db.nums[es].kind) db.nums[es].kind = kind;
+}
+function ensureNums() {
+  if (ensureNums.done) return; ensureNums.done = true;
+  NUM_LIST.forEach((n, i) => numEntry(numEs(n), String(n), 'num', i));
+  let i = 0;
+  for (let h = 1; h <= 12; h++) for (let m = 0; m < 60; m += 5) numEntry(timeEs(h, m), `${h}:${String(m).padStart(2, '0')}`, 'time', i++);
+  ORDINALS.forEach((o, k) => numEntry(o, `${k + 1}.`, 'ord', k));
+  i = 0;
+  MONTHS_ES.forEach((mes, mi) => { for (let d = 1; d <= MONTH_DAYS[mi]; d++) numEntry(`el ${d === 1 ? 'primero' : numEs(d)} de ${mes}`, `${d} ${MONTHS_TR[mi]}`, 'date', i++); });
+}
+const numsOf = kind => { ensureNums(); return Object.values(db.nums).filter(c => (c.kind || 'num') === kind); };
 
 /* ---------------- son üniteler ---------------- */
 const unitKey = c => c.unit ? c.unit.sec * 1000 + c.unit.no : -1;
@@ -108,7 +171,10 @@ function unitLabel(key) { return `${Math.floor(key / 1000)}. Kısım ${key % 100
 const TOPIC_SECS = 90;
 const TOPICS = {
   verbs: { title: 'Fiiller', secs: TOPIC_SECS, store: () => db.cards, pool: () => pool().filter(isVerb) },
-  nums:  { title: 'Sayılar', store: () => db.nums, pool: () => { ensureNums(); return Object.values(db.nums); }, deck: p => buildTrainDeck(p) },
+  nums:  { title: 'Sayılar', store: () => db.nums, pool: () => numsOf('num'), deck: p => buildTrainDeck(p) },
+  times: { title: 'Saatler', store: () => db.nums, pool: () => numsOf('time'), deck: p => buildTrainDeck(p) },
+  ords:  { title: 'Sıra sayıları', store: () => db.nums, pool: () => numsOf('ord'), deck: p => buildTrainDeck(p) },
+  dates: { title: 'Tarihler', store: () => db.nums, pool: () => numsOf('date'), deck: p => buildTrainDeck(p) },
   r3:    { title: 'Son 3 ünite', secs: TOPIC_SECS, store: () => db.cards, pool: () => recentPool(3) },
   r5:    { title: 'Son 5 ünite', secs: TOPIC_SECS, store: () => db.cards, pool: () => recentPool(5) },
   r7:    { title: 'Son 7 ünite', secs: TOPIC_SECS, store: () => db.cards, pool: () => recentPool(7) },
@@ -171,6 +237,7 @@ const pool = () => Object.values(db.cards).filter(inPool);
 function markNewSeen(c, countDaily) { if (!c.seen) { c.seen = true; if (countDaily) { rollDay(); db.day.newSeen++; } } }
 // doğru cevap; step: kaç kutu ilerlesin (0 = yerinde kal)
 function onRight(c, step = 1, countDaily = false) {
+  c.mod = Date.now(); bump();
   const wasNew = !c.seen;
   markNewSeen(c, countDaily);
   if (wasNew) { c.box = Math.max(1, step); c.due = dueAt(c.box); }
@@ -179,26 +246,45 @@ function onRight(c, step = 1, countDaily = false) {
   if (c.mist && ++c.mstreak >= MIST_EXIT) { c.mist = false; c.mstreak = 0; }
 }
 function onWrong(c, countDaily = false) {
+  c.mod = Date.now();
   markNewSeen(c, countDaily);
   c.box = 0; c.due = Date.now(); c.wrong++; c.mist = true; c.mstreak = 0; c.lastWrong = Date.now();
 }
 
-/* ---------------- ses ---------------- */
+/* ---------------- ses ----------------
+   Önce Duolingo'nun kendi ses kaydı (<audio> ile çalınır: iPhone sessiz moddayken de duyulur),
+   kaydı olmayanlarda (sayılar, çekimler) cihazın konuşma sentezi.
+   audioSession = 'playback': iOS 17+ Safari'de sayfanın sesini sessiz mod anahtarından bağımsız yapar. */
+try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch {}
 let voice = null;
 function pickVoice() { const v = speechSynthesis.getVoices(); voice = v.find(x => x.lang === 'es-ES') || v.find(x => /^es/i.test(x.lang)) || null; }
 if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
-function speak(text, force) {
-  if (!('speechSynthesis' in window) || (!force && db.opts.tts !== '1')) return;
+const AUD = typeof Audio !== 'undefined' ? new Audio() : null;
+if (AUD) { AUD.preload = 'auto'; AUD.setAttribute('playsinline', ''); }
+function tts(text, rate = 0.9) {
+  if (!('speechSynthesis' in window)) return;
   speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text); u.lang = 'es-ES'; if (voice) u.voice = voice; u.rate = 0.9;
+  const u = new SpeechSynthesisUtterance(text); u.lang = 'es-ES'; if (voice) u.voice = voice; u.rate = rate;
   speechSynthesis.speak(u);
+}
+function audioFor(text) { const c = db.cards[text]; return c && c.audio ? c.audio : ''; }
+function speak(text, force, slow) {
+  if (!force && db.opts.tts !== '1') return;
+  const url = audioFor(text);
+  if (url && AUD) {
+    try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch {}
+    AUD.pause(); AUD.src = url; AUD.playbackRate = slow ? 0.7 : 1;
+    const p = AUD.play(); if (p && p.catch) p.catch(() => tts(text, slow ? 0.6 : 0.9));
+    return;
+  }
+  tts(text, slow ? 0.6 : 0.9);
 }
 
 /* ---------------- navigasyon ---------------- */
 let view = 'play';
 function go(v) {
   view = v;
-  document.body.classList.toggle('ingame', v === 'game');
+  document.body.classList.toggle('ingame', v === 'game' || v === 'mc');
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
   document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
   if (v === 'play') renderMenu();
@@ -231,9 +317,11 @@ function renderTopics() {
   const vr = recOf(recKey('verbs'));
   $('verbs-sub').textContent = `${vp.length} fiil · 90 sn · Rekor ${vr ?? '–'}` + (vp.some(c => c.mist) ? ` · ${vp.filter(c => c.mist).length} hata` : '');
   $('go-verbs').disabled = vp.length < 2;
-  const np = TOPICS.nums.pool();
-  const nm = np.filter(c => c.mist).length;
-  $('nums-sub').textContent = `1–100 ve 200…1000 · 20'lik tur` + (nm ? ` · ${nm} hata` : '');
+  for (const id of ['nums', 'times', 'ords', 'dates']) {
+    const nm = TOPICS[id].pool().filter(c => c.mist).length;
+    const el = document.querySelector(`[data-numtopic="${id}"] .rec`);
+    if (el) el.textContent = nm ? `${nm} hata` : '20\'lik tur';
+  }
   for (const n of [3, 5, 7]) {
     const ks = [...recentUnits(n)].sort((a, b) => a - b);
     const cnt = recentPool(n).length;
@@ -243,6 +331,7 @@ function renderTopics() {
     b.querySelector('.rec').textContent = `Rekor ${recOf(recKey('r' + n)) ?? '–'}`;
   }
   const top = [...recentUnits(1)][0];
+  if (typeof renderExtras === 'function') renderExtras();
   $('recent-note').textContent = top ? `En son ünite: ${unitLabel(top)} · 90 saniyelik oyun, sadece seçilen ünitelerin kelimeleri.` : '';
 }
 
@@ -258,7 +347,7 @@ function renderMistList(p) {
   const frag = document.createDocumentFragment();
   for (const c of mistAll ? list : list.slice(0, MIST_SHOW)) {
     const d = document.createElement('div'); d.className = 'mi' + (c.mist ? '' : ' done');
-    const l = document.createElement('div'); l.className = 'l'; l.textContent = c.es;
+    const l = document.createElement('div'); l.className = 'l'; l.textContent = disp(c);
     if (db.opts.tags === '1') { const t = tagOf(c); if (t) { const s = document.createElement('small'); s.textContent = t; l.appendChild(s); } }
     const n = document.createElement('span'); n.className = 'n';
     n.textContent = c.mist ? `${c.wrong} hata` : `${c.wrong} hata · düzeldi ✓`;
@@ -409,7 +498,7 @@ function render(all) {
     const c = G.store[k];
     if (G.fresh && G.fresh.has(id)) { el.classList.remove('enter'); void el.offsetWidth; el.classList.add('enter'); }
     if (side === 'L') {
-      el.textContent = c.es; fit(el, c.es);
+      const shown = disp(c); el.textContent = shown; fit(el, shown);
       // fiillerde mastar da görünür: quiero → v. (querer)
       const t = db.opts.tags === '1' ? tagOf(c) : '';
       if (t) { const s = document.createElement('span'); s.className = 'tg'; s.textContent = t; el.appendChild(s); }
@@ -447,7 +536,7 @@ function match(li, ri, eL, eR) {
   const firstTry = !G.wrongSet.has(k);
   const filler = G.fillers && G.fillers.has(k);
   if (firstTry && !filler) onRight(c, 1);
-  else if (firstTry && filler) markNewSeen(c);
+  else { if (firstTry && filler) markNewSeen(c); bump(); }
   save();
   G.score++; G.cleared += filler ? 0 : 1;
   G.combo = firstTry ? G.combo + 1 : 0; G.bestCombo = Math.max(G.bestCombo, G.combo);
@@ -540,7 +629,7 @@ document.querySelectorAll('[data-timed]').forEach(b => b.onclick = () => startGa
 $('go-train').onclick = () => startGame('train');
 $('go-mist').onclick = () => startGame('mist');
 $('go-verbs').onclick = () => startGame('topic', 'verbs');
-$('go-nums').onclick = () => startGame('topic', 'nums');
+document.querySelectorAll('[data-numtopic]').forEach(b => b.onclick = () => startGame('topic', b.dataset.numtopic));
 document.querySelectorAll('[data-recent]').forEach(b => b.onclick = () => startGame('topic', 'r' + b.dataset.recent));
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && G && G.mode === 'timed' && !G.over && G.start) tick();
@@ -558,7 +647,7 @@ function fcStart() {
 }
 function fcStats() { $('c-due').textContent = F.q.filter(c => c.seen).length + (F.cur && F.cur.seen ? 1 : 0); $('c-new').textContent = F.q.filter(c => !c.seen).length + (F.cur && !F.cur.seen ? 1 : 0); }
 function fcNext() {
-  F.shown = false; $('fc-a').textContent = ''; $('fc-h').textContent = ''; $('fc-tag').textContent = '';
+  F.shown = false; $('fc-a').textContent = ''; $('fc-h').textContent = ''; $('fc-tag').textContent = ''; $('fc-x').innerHTML = '';
   $('fc-grade').hidden = true;
   F.cur = F.q.shift() || null;
   if (!F.cur) {
@@ -568,7 +657,7 @@ function fcNext() {
   }
   const c = F.cur;
   F.dir = db.opts.dir === 'mix' ? (Math.random() < .5 ? 'es' : 'tr') : db.opts.dir;
-  $('fc-q').textContent = F.dir === 'es' ? c.es : trOf(c);
+  $('fc-q').textContent = F.dir === 'es' ? disp(c) : trOf(c);
   if (F.dir === 'es' && db.opts.tags === '1') $('fc-tag').textContent = tagOf(c);
   $('fc-unit').textContent = c.unit ? `${c.unit.sec}. Kısım · ${c.unit.no}. Ünite${c.unit.title ? ' · ' + c.unit.title : ''}` : '';
   $('fc-dir').textContent = (c.seen ? '' : 'YENİ · ') + (F.dir === 'es' ? 'İspanyolca → Türkçe' : 'Türkçe → İspanyolca');
@@ -579,10 +668,13 @@ function fcNext() {
 function fcShow() {
   if (!F.cur || F.shown) return;
   F.shown = true; const c = F.cur;
-  $('fc-a').textContent = F.dir === 'es' ? trOf(c) : c.es;
+  $('fc-a').textContent = F.dir === 'es' ? trOf(c) : disp(c);
   if (F.dir === 'tr' && db.opts.tags === '1') $('fc-tag').textContent = tagOf(c);
   const alt = (c.alt || '').split(',').map(s => s.trim()).filter(s => s && norm(s) !== norm(trOf(c))).join(', ');
   $('fc-h').textContent = alt;
+  const ex = EX[c.es];
+  $('fc-x').innerHTML = '';
+  if (ex) { const a = document.createElement('div'); a.textContent = ex[0]; const b = document.createElement('small'); b.textContent = ex[1]; $('fc-x').append(a, b); }
   $('fc-show').hidden = true; $('fc-grade').hidden = false;
   if (F.dir === 'tr') speak(c.es);
 }
@@ -611,7 +703,7 @@ function renderList() {
   const frag = document.createDocumentFragment();
   for (const c of cards.slice(0, 500)) {
     const d = document.createElement('div'); d.className = 'item';
-    const l = document.createElement('div'); l.className = 'l'; l.textContent = c.es;
+    const l = document.createElement('div'); l.className = 'l'; l.textContent = disp(c);
     if (db.opts.tags === '1') { const t = tagOf(c); if (t) { const sm = document.createElement('small'); sm.textContent = t; l.appendChild(sm); } }
     const dots = document.createElement('span'); dots.className = 'dots' + (c.mist ? ' m' : '');
     dots.textContent = !c.seen ? 'yeni' : '●'.repeat(c.box) + '○'.repeat(5 - c.box) + (c.mist ? '  hata' : '');
@@ -634,13 +726,14 @@ function bindSettings() {
   $('o-sec').innerHTML = '<option value="all">Tümü</option>' + secs.map(s => `<option value="${s}">${s}. Kısım</option>`).join('');
   if (db.opts.section !== 'all' && !secs.map(String).includes(db.opts.section)) db.opts.section = 'all';
   $('o-sec').value = db.opts.section; $('o-new').value = db.opts.newPerDay;
-  $('o-dir').value = db.opts.dir; $('o-tts').value = db.opts.tts; $('o-tags').value = db.opts.tags;
+  $('o-dir').value = db.opts.dir; $('o-tts').value = db.opts.tts; $('o-tags').value = db.opts.tags; $('o-art').value = db.opts.art;
 }
 $('o-sec').onchange = e => { db.opts.section = e.target.value; save(); };
 $('o-new').onchange = e => { db.opts.newPerDay = Math.max(0, +e.target.value || 0); save(); };
 $('o-dir').onchange = e => { db.opts.dir = e.target.value; save(); };
 $('o-tts').onchange = e => { db.opts.tts = e.target.value; save(); };
 $('o-tags').onchange = e => { db.opts.tags = e.target.value; save(); };
+$('o-art').onchange = e => { db.opts.art = e.target.value; save(); };
 $('f-csv').onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
   const r = importRows(parseCSV(await f.text()));
@@ -681,11 +774,15 @@ function toast(msg) {
   clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 3200);
 }
 function importWords(list) {
-  return importRows(list.map(w => {
+  const res = importRows(list.map(w => {
     const [es, tr, alt, sec, no, title] = w;
     const unit = sec ? `${sec}. Kısım ${no}. Ünite – ${title}` : '';
     return [es, tr, [alt, unit].filter(Boolean).join(' | ')];
   }));
+  for (const w of list) if (w[7] && db.cards[w[0]]) db.cards[w[0]].audio = w[7];
+  if (typeof applyPending === 'function') applyPending();
+  save();
+  return res;
 }
 function fmtDate(iso) {
   try { return new Date(iso).toLocaleString('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }); } catch { return iso; }

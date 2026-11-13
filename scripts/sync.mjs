@@ -9,7 +9,9 @@ import { readFile, writeFile } from 'node:fs/promises';
 const OUT = new URL('../words.json', import.meta.url);
 const LEARN = 'es', FROM = 'tr';
 
-export async function collect(jwt, { fetchImpl = fetch, log = console.log, base = 'https://www.duolingo.com' } = {}) {
+// prev: önceki words.json. Varsa ve ses bilgisi içeriyorsa ARTIMLI çalışır: sadece en son kayıtlı ünite ve
+// sonrası sorgulanır (~3 istek). İlk çalıştırmada, ses bilgisi yokken ya da full=true iken TAM tarama (~130 istek).
+export async function collect(jwt, { fetchImpl = fetch, log = console.log, base = 'https://www.duolingo.com', prev = null, full = false } = {}) {
   const uid = JSON.parse(atob(jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).sub;
   const H = {
     Authorization: 'Bearer ' + jwt,
@@ -67,20 +69,29 @@ export async function collect(jwt, { fetchImpl = fetch, log = console.log, base 
     return out;
   }
 
+  const prevWords = prev && Array.isArray(prev.words) ? prev.words : [];
+  const prevMax = Math.max(0, ...prevWords.map(w => w[6]).filter(n => n < 9999));
+  const incremental = !full && prevWords.length && prevMax && prevWords.every(w => w.length >= 8);
+  const scan = incremental ? units.filter(u => u.no >= prevMax) : units;
+  log(incremental ? `Artımlı tarama: ${scan.length} ünite (kayıtlı son ünite #${prevMax} ve sonrası)` : `Tam tarama: ${scan.length} ünite`);
+
   // her kelime ilk göründüğü üniteye atanır
+  const known = new Set(prevWords.map(w => w[0]));
   const words = new Map();
-  for (const u of units) {
+  for (const u of scan) {
     log(`Ünite ${u.no}/${unitNo}`);
     for (const lx of await lexemes([...u.skills.values()]))
-      if (!words.has(lx.text)) words.set(lx.text, { tr: lx.translations, unit: u });
+      if (!words.has(lx.text) && !(incremental && known.has(lx.text))) words.set(lx.text, { tr: lx.translations, audio: lx.audioURL, unit: u });
   }
-  const all = new Map();
-  for (const u of units) for (const [k, v] of u.skills) {
-    const p = all.get(k);
-    if (!p || v.finishedLevels > p.finishedLevels || (v.finishedLevels === p.finishedLevels && v.finishedSessions > p.finishedSessions)) all.set(k, v);
+  if (!incremental) {
+    const all = new Map();
+    for (const u of units) for (const [k, v] of u.skills) {
+      const p = all.get(k);
+      if (!p || v.finishedLevels > p.finishedLevels || (v.finishedLevels === p.finishedLevels && v.finishedSessions > p.finishedSessions)) all.set(k, v);
+    }
+    for (const lx of await lexemes([...all.values()]))
+      if (!words.has(lx.text)) words.set(lx.text, { tr: lx.translations, audio: lx.audioURL, unit: null });
   }
-  for (const lx of await lexemes([...all.values()]))
-    if (!words.has(lx.text)) words.set(lx.text, { tr: lx.translations, unit: null });
 
   // ana karşılık: ilk öneri; ilk önerinin başı olan daha kısa bir karşılık varsa o (aspirini → aspirin)
   const clean = s => s.normalize('NFC').replace(/i̇/g, 'i').trim();
@@ -92,11 +103,12 @@ export async function collect(jwt, { fetchImpl = fetch, log = console.log, base 
     for (const t of tr) if (t.length >= 2 && t.length < main.length && tr[0].startsWith(t)) main = t;
     return { main, rest: tr.filter(t => t !== main) };
   };
-  const list = [...words].map(([es, w]) => {
+  const fresh = [...words].map(([es, w]) => {
     const { main, rest } = pickMain(es, w.tr);
-    // [ispanyolca, türkçe, alternatifler, kısım, ünite(kısım içi), ünite başlığı, global ünite sırası]
-    return [es, main, rest.slice(0, 3).join(', '), w.unit?.sec ?? 0, w.unit?.local ?? 0, w.unit?.title ?? '', w.unit?.no ?? 9999];
-  }).sort((a, b) => a[6] - b[6] || a[0].localeCompare(b[0], 'es'));
+    // [ispanyolca, türkçe, alternatifler, kısım, ünite(kısım içi), ünite başlığı, global ünite sırası, ses URL]
+    return [es, main, rest.slice(0, 3).join(', '), w.unit?.sec ?? 0, w.unit?.local ?? 0, w.unit?.title ?? '', w.unit?.no ?? 9999, w.audio || ''];
+  });
+  const list = (incremental ? [...prevWords, ...fresh] : fresh).sort((a, b) => a[6] - b[6] || a[0].localeCompare(b[0], 'es'));
 
   const cur = units.length ? units[units.length - 1] : null;
   return { course: `${FROM}-${LEARN}`, lastUnit: cur ? { sec: cur.sec, no: cur.local, title: cur.title } : null, words: list };
@@ -106,9 +118,11 @@ export async function collect(jwt, { fetchImpl = fetch, log = console.log, base 
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())) {
   const jwt = (process.env.DUO_JWT || '').trim();
   if (!jwt) { console.error('DUO_JWT tanımlı değil.'); process.exit(1); }
-  const data = await collect(jwt);
   let prev = null;
   try { prev = JSON.parse(await readFile(OUT, 'utf8')); } catch {}
+  // her ayın ilk pazartesisi tam tarama: Duolingo'nun eski ünitelerde yaptığı değişiklikler de yakalansın
+  const full = process.env.FULL === '1' || new Date().getUTCDate() <= 7;
+  const data = await collect(jwt, { prev, full });
   const same = prev && JSON.stringify(prev.words) === JSON.stringify(data.words);
   if (same) { console.log(`Değişiklik yok (${data.words.length} kelime).`); process.exit(0); }
   const added = prev ? data.words.length - prev.words.length : data.words.length;

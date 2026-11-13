@@ -34,6 +34,11 @@
         <div class="stat"><b id="st-due">0</b><small>Bugün tekrar</small></div>
         <div class="stat"><b id="st-known">0</b><small>Öğrenilmiş</small></div>
       </div>
+      <div class="streak" id="streak-row">
+        <span>🔥 <b id="st-streak">0</b> gün seri</span>
+        <span class="week" id="st-week" aria-label="Son 7 gün"></span>
+        <span>Bu hafta <b id="st-wk">0</b></span>
+      </div>
       <h2 class="sec">Süreli oyun</h2>
       <div class="timed">
         <button class="tile" data-timed="60"><b>1 dk</b><small>Rekor <span data-rec="60">–</span></small></button>
@@ -54,13 +59,32 @@
       </div>
       <p class="note" id="recent-note"></p>
 
+      <h2 class="sec">Dinleme</h2>
+      <button class="row-btn" id="go-listen">
+        <span><b>🎧 Dinle ve seç</b><small id="listen-sub">Kelimeyi duy, Türkçesini seç · 20 soru</small></span><i>›</i>
+      </button>
+
+      <h2 class="sec">Fiil çekimi</h2>
+      <div class="conj-grid">
+        <button class="tile" data-conj="pres"><b>Presente</b><small>şimdiki</small></button>
+        <button class="tile" data-conj="pret"><b>Pretérito</b><small>geçmiş (-di)</small></button>
+        <button class="tile" data-conj="imp"><b>Imperfecto</b><small>geçmiş (-iyordu)</small></button>
+        <button class="tile" data-conj="fut"><b>Futuro</b><small>gelecek</small></button>
+        <button class="tile wide" data-conj="mix"><b>Karışık</b><small id="conj-sub">4 zaman · 20 soru</small></button>
+      </div>
+
       <h2 class="sec">Konular</h2>
       <button class="row-btn" id="go-verbs">
         <span><b>Fiiller</b><small id="verbs-sub">–</small></span><i>›</i>
       </button>
-      <button class="row-btn" id="go-nums">
-        <span><b>Sayılar</b><small id="nums-sub">–</small></span><i>›</i>
-      </button>
+
+      <h2 class="sec">Sayılar</h2>
+      <div class="num-grid">
+        <button class="tile" data-numtopic="nums"><b>1–1000</b><small class="rec">–</small></button>
+        <button class="tile" data-numtopic="times"><b>Saatler</b><small class="rec">–</small></button>
+        <button class="tile" data-numtopic="ords"><b>Sıra</b><small class="rec">–</small></button>
+        <button class="tile" data-numtopic="dates"><b>Tarihler</b><small class="rec">–</small></button>
+      </div>
 
       <h2 class="sec">Hatalarım</h2>
       <div class="panel mist-panel">
@@ -83,6 +107,20 @@
     </div>
     <div class="board-wrap"><div class="board" id="board"></div></div>
     <div class="count" id="g-count" hidden></div>
+  </section>
+
+  <!-- ÇOKTAN SEÇMELİ (dinleme, fiil çekimi) — eşleştirme oyunundan ayrı ekran -->
+  <section class="view" id="v-mc">
+    <div class="gbar">
+      <button class="x" id="mc-quit" aria-label="Çık">✕</button>
+      <div class="gmid"><div class="prog" id="mc-prog"><i></i></div></div>
+      <div class="score"><b id="mc-score">0</b><small id="mc-combo"></small></div>
+    </div>
+    <div class="mc-wrap">
+      <div class="mc-q" id="mc-q"></div>
+      <div class="mc-opts" id="mc-opts"></div>
+      <div class="mc-fb" id="mc-fb"></div>
+    </div>
   </section>
 
   <!-- SONUÇ -->
@@ -111,6 +149,7 @@
       <div class="tag" id="fc-tag"></div>
       <div class="a" id="fc-a"></div>
       <div class="h" id="fc-h"></div>
+      <div class="ex" id="fc-x"></div>
       <div class="dir" id="fc-dir"></div>
     </div>
     <button class="big" id="fc-show">Cevabı göster</button>
@@ -162,6 +201,8 @@
           <select id="o-tts"><option value="1">Açık</option><option value="0">Kapalı</option></select></div>
         <div class="row"><label for="o-tags">Kelime türü etiketi</label>
           <select id="o-tags"><option value="1">Göster</option><option value="0">Gizle</option></select></div>
+        <div class="row"><label for="o-art">Artikel (el / la)</label>
+          <select id="o-art"><option value="1">Göster</option><option value="0">Gizle</option></select></div>
       </div>
       <div class="panel">
         <h2>Etiketler</h2>
@@ -188,6 +229,18 @@
         </div>
       </div>
       <div class="panel">
+        <h2>Bulut yedeği (GitHub)</h2>
+        <p class="note" id="cloud-info">Bağlı değil. İlerlemen sadece bu cihazda.</p>
+        <div id="cloud-off">
+          <input type="password" id="cloud-token" placeholder="GitHub token (gist izni)" autocomplete="off" autocapitalize="off" spellcheck="false">
+          <button class="btn" id="cloud-connect">Bağlan</button>
+        </div>
+        <div id="cloud-on" hidden>
+          <button class="btn" id="cloud-now">Şimdi eşitle</button>
+          <button class="btn danger" id="cloud-off-btn">Bağlantıyı kes</button>
+        </div>
+      </div>
+      <div class="panel">
         <h2>Yedek</h2>
         <button class="btn" id="b-export">Yedeği indir (JSON)</button>
         <label class="btn" for="f-backup">Yedekten geri yükle</label>
@@ -200,5 +253,6 @@
 </main>
 <div id="toast" hidden></div>
 <script src="app.js"></script>
+<script src="modes.js"></script>
 </body>
 </html>
