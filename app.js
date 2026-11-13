@@ -28,6 +28,7 @@ function load() {
   const b = blank();
   db.opts = Object.assign(b.opts, db.opts || {});
   db.day = db.day || b.day; db.records = db.records || {}; db.cards = db.cards || {};
+  db.nums = db.nums || {};
 }
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(db)); }
@@ -49,11 +50,55 @@ function guessTag(es) {
   return '';
 }
 function tagOf(c) {
+  if (c.num) return '';
   const t = TAGS[c.es];
   if (t) return t.l ? `${t.t} (${t.l})` : t.t;
   return guessTag(c.es);
 }
-const trOf = c => (TAGS[c.es] && TAGS[c.es].b) || c.tr;
+const trOf = c => c.num ? c.tr : ((TAGS[c.es] && TAGS[c.es].b) || c.tr);
+const isVerb = c => /^(v\.|part\.)/.test(TAGS[c.es] ? TAGS[c.es].t : guessTag(c.es));
+
+/* ---------------- sayılar ----------------
+   1–100 ve 200, 300 … 1000. İlerleme kelimelerden ayrı tutulur (db.nums),
+   böylece "dos", "cien" gibi kelime kartlarıyla karışmaz. */
+const ES_1_29 = ['', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve', 'diez',
+  'once', 'doce', 'trece', 'catorce', 'quince', 'dieciséis', 'diecisiete', 'dieciocho', 'diecinueve', 'veinte',
+  'veintiuno', 'veintidós', 'veintitrés', 'veinticuatro', 'veinticinco', 'veintiséis', 'veintisiete', 'veintiocho', 'veintinueve'];
+const ES_TENS = { 3: 'treinta', 4: 'cuarenta', 5: 'cincuenta', 6: 'sesenta', 7: 'setenta', 8: 'ochenta', 9: 'noventa' };
+const ES_HUNDREDS = { 100: 'cien', 200: 'doscientos', 300: 'trescientos', 400: 'cuatrocientos', 500: 'quinientos',
+  600: 'seiscientos', 700: 'setecientos', 800: 'ochocientos', 900: 'novecientos', 1000: 'mil' };
+function numEs(n) {
+  if (ES_HUNDREDS[n]) return ES_HUNDREDS[n];
+  if (n < 30) return ES_1_29[n];
+  const t = Math.floor(n / 10), u = n % 10;
+  return u ? `${ES_TENS[t]} y ${ES_1_29[u]}` : ES_TENS[t];
+}
+const NUM_LIST = [...Array.from({ length: 100 }, (_, i) => i + 1), 200, 300, 400, 500, 600, 700, 800, 900, 1000];
+function ensureNums() {
+  NUM_LIST.forEach((n, i) => {
+    const es = numEs(n);
+    if (!db.nums[es]) db.nums[es] = { es, tr: String(n), num: true, box: 0, due: 0, seen: false, wrong: 0, mist: false, mstreak: 0, order: i };
+  });
+}
+
+/* ---------------- son üniteler ---------------- */
+const unitKey = c => c.unit ? c.unit.sec * 1000 + c.unit.no : -1;
+function recentUnits(n) {
+  const keys = [...new Set(Object.values(db.cards).map(unitKey).filter(k => k > 0))].sort((a, b) => b - a).slice(0, n);
+  return new Set(keys);
+}
+function recentPool(n) { const ks = recentUnits(n); return Object.values(db.cards).filter(c => ks.has(unitKey(c))); }
+function unitLabel(key) { return `${Math.floor(key / 1000)}. Kısım ${key % 1000}. Ünite`; }
+
+/* ---------------- konu havuzları ----------------
+   Her konu: başlık, kart deposu (kelimeler ya da sayılar), havuz ve tur destesi. */
+const TOPICS = {
+  verbs: { title: 'Fiiller', store: () => db.cards, pool: () => pool().filter(isVerb), deck: p => buildTrainDeck(p) },
+  nums:  { title: 'Sayılar', store: () => db.nums, pool: () => { ensureNums(); return Object.values(db.nums); }, deck: p => buildTrainDeck(p) },
+  r3:    { title: 'Son 3 ünite', store: () => db.cards, pool: () => recentPool(3), deck: p => shuffle(p.slice()).map(c => ({ es: c.es, filler: false })) },
+  r5:    { title: 'Son 5 ünite', store: () => db.cards, pool: () => recentPool(5), deck: p => shuffle(p.slice()).map(c => ({ es: c.es, filler: false })) },
+  r7:    { title: 'Son 7 ünite', store: () => db.cards, pool: () => recentPool(7), deck: p => shuffle(p.slice()).map(c => ({ es: c.es, filler: false })) },
+};
 
 /* ---------------- CSV import ---------------- */
 function parseCSV(text) {
@@ -143,7 +188,7 @@ function go(v) {
   if (v === 'play') renderMenu();
   if (v === 'cards') fcStart();
   if (v === 'words') renderList();
-  if (v === 'settings') bindSettings();
+  if (v === 'settings') { bindSettings(); syncInfo(); }
 }
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => go(b.dataset.v));
 function refreshAll() { if (view === 'play') renderMenu(); if (view === 'words') renderList(); }
@@ -162,6 +207,25 @@ function renderMenu() {
   document.querySelectorAll('[data-timed]').forEach(b => b.disabled = p.length < 2);
   $('go-train').disabled = p.length < 2;
   renderMistList(p);
+  renderTopics();
+}
+
+function renderTopics() {
+  const vp = TOPICS.verbs.pool();
+  $('verbs-sub').textContent = `${vp.length} fiil · 20'lik tur, mastarıyla birlikte` + (vp.some(c => c.mist) ? ` · ${vp.filter(c => c.mist).length} hata` : '');
+  $('go-verbs').disabled = vp.length < 2;
+  const np = TOPICS.nums.pool();
+  const nm = np.filter(c => c.mist).length;
+  $('nums-sub').textContent = `1–100 ve 200…1000 · 20'lik tur` + (nm ? ` · ${nm} hata` : '');
+  for (const n of [3, 5, 7]) {
+    const ks = [...recentUnits(n)].sort((a, b) => a - b);
+    const cnt = recentPool(n).length;
+    const b = document.querySelector(`[data-recent="${n}"]`);
+    b.disabled = cnt < 2;
+    b.querySelector('small').textContent = cnt ? `${cnt} kelime` : '–';
+  }
+  const top = [...recentUnits(1)][0];
+  $('recent-note').textContent = top ? `En son ünite: ${unitLabel(top)}. Turda seçilen ünitelerin bütün kelimeleri gelir.` : '';
 }
 
 /* Hatalarım listesi: şimdiye kadar yanlış eşleştirdiğin bütün kelimeler.
@@ -193,19 +257,23 @@ $('mist-more').onclick = () => { mistAll = !mistAll; renderMistList(); };
 
 /* ---------------- eşleştirme oyunu ---------------- */
 /* G: aktif oyun durumu
-   mode: 'timed' | 'train' | 'mist'
-   L, R: 5 yuva; her yuva bir kart (es) ya da null
-   deck: train/mist için sıralı deste; timed için ağırlıklı seçim  */
+   mode: 'timed' | 'train' | 'mist' | 'topic'
+   L, R: 5 yuva; her yuva bir kart anahtarı (es) ya da null
+   store: kartların tutulduğu depo (kelimeler db.cards, sayılar db.nums)
+   deck: süreli olmayan modlar için sıralı deste; timed için ağırlıklı seçim  */
 let G = null;
 
-function startGame(mode, secs) {
-  const p = pool();
+function startGame(mode, arg) {
+  const topic = mode === 'topic' ? TOPICS[arg] : null;
+  const p = topic ? topic.pool() : pool();
   if (p.length < 2) return;
-  G = { mode, secs, L: Array(PAIRS).fill(null), R: Array(PAIRS).fill(null), sel: null, busy: false,
+  G = { mode, secs: mode === 'timed' ? arg : 0, topicId: topic ? arg : null, store: topic ? topic.store() : db.cards,
+        L: Array(PAIRS).fill(null), R: Array(PAIRS).fill(null), sel: null, busy: false,
         score: 0, wrong: 0, combo: 0, bestCombo: 0, cleared: 0, wrongSet: new Map(), recent: [],
         usedThisGame: new Set(), deck: [], total: 0, start: 0, timer: null, over: false, lockedTap: false };
   if (mode === 'train') G.deck = buildTrainDeck(p);
   if (mode === 'mist') G.deck = buildMistDeck(p);
+  if (topic) G.deck = topic.deck(p);
   G.total = mode === 'timed' ? 0 : G.deck.filter(x => !x.filler).length;
   $('g-time').hidden = mode !== 'timed';
   $('g-prog').hidden = mode === 'timed';
@@ -244,7 +312,7 @@ function interleave(a, b) { const out = []; while (a.length || b.length) { if (a
 // tahtada aynı İspanyolca ya da aynı Türkçe karşılık olmasın
 function boardKeys(extra = []) {
   const es = new Set(), tr = new Set();
-  for (const k of [...G.L, ...extra]) if (k) { es.add(k); tr.add(norm(trOf(db.cards[k]))); }
+  for (const k of [...G.L, ...extra]) if (k) { es.add(k); tr.add(norm(trOf(G.store[k]))); }
   return { es, tr };
 }
 function fits(c, keys) { return !keys.es.has(c.es) && !keys.tr.has(norm(trOf(c))); }
@@ -263,7 +331,7 @@ function nextTimed(keys) {
 }
 function nextFromDeck(keys) {
   for (let i = 0; i < G.deck.length; i++) {
-    const c = db.cards[G.deck[i].es];
+    const c = G.store[G.deck[i].es];
     if (c && fits(c, keys)) return { c, filler: G.deck.splice(i, 1)[0].filler };
   }
   return null;
@@ -318,11 +386,12 @@ function render(all) {
     el.classList.remove('sel', 'ok', 'bad', 'gone');
     el.classList.toggle('empty', !k);
     if (!k) { el.textContent = ''; continue; }
-    const c = db.cards[k];
+    const c = G.store[k];
     if (G.fresh && G.fresh.has(id)) { el.classList.remove('enter'); void el.offsetWidth; el.classList.add('enter'); }
     if (side === 'L') {
       el.textContent = c.es; fit(el, c.es);
-      const t = db.opts.tags === '1' ? (TAGS[c.es] ? TAGS[c.es].t : guessTag(c.es)) : '';
+      // fiillerde mastar da görünür: quiero → v. (querer)
+      const t = db.opts.tags === '1' ? tagOf(c) : '';
       if (t) { const s = document.createElement('span'); s.className = 'tg'; s.textContent = t; el.appendChild(s); }
     } else { const t = trOf(c); el.textContent = t; fit(el, t); }
     if (G.sel && G.sel.side === side && G.sel.i === i) el.classList.add('sel');
@@ -353,7 +422,7 @@ function tap(side, i) {
 }
 
 function match(li, ri, eL, eR) {
-  const k = G.L[li], c = db.cards[k];
+  const k = G.L[li], c = G.store[k];
   eL.classList.add('ok'); eR.classList.add('ok');
   const firstTry = !G.wrongSet.has(k);
   const filler = G.fillers && G.fillers.has(k);
@@ -378,7 +447,7 @@ function match(li, ri, eL, eR) {
 }
 function miss(lk, rk, eL, eR) {
   G.wrong++; G.combo = 0; $('g-combo').textContent = '';
-  const c = db.cards[lk];
+  const c = G.store[lk];
   if (!(G.fillers && G.fillers.has(lk))) { onWrong(c); G.wrongSet.set(lk, (G.wrongSet.get(lk) || 0) + 1); }
   save();
   eL.classList.add('bad'); eR.classList.add('bad');
@@ -426,7 +495,7 @@ function endGame() {
     sub = (isRec ? `<span class="r-rec">Yeni rekor! 🏆</span>\n` : `Rekor: ${prev}\n`) +
           `Doğruluk %${acc} · En uzun seri ${G.bestCombo}`;
   } else {
-    title = G.mode === 'train' ? 'Antrenman bitti' : 'Hatalar turu bitti';
+    title = G.mode === 'topic' ? `${TOPICS[G.topicId].title} turu bitti` : G.mode === 'train' ? 'Antrenman bitti' : 'Hatalar turu bitti';
     big = `${G.cleared}/${G.total}`;
     const still = pool().filter(c => c.mist).length;
     sub = `Süre ${fmt(dur)} · Doğruluk %${acc}` + (G.mode === 'mist' ? `\nHatalarında kalan: ${still}` : '');
@@ -435,8 +504,8 @@ function endGame() {
   $('r-title').textContent = title;
   $('r-big').textContent = big;
   $('r-sub').innerHTML = sub;
-  const last = { mode: G.mode, secs: G.secs };
-  $('r-again').onclick = () => startGame(last.mode, last.secs);
+  const last = { mode: G.mode, arg: G.mode === 'topic' ? G.topicId : G.secs };
+  $('r-again').onclick = () => startGame(last.mode, last.arg);
   $('r-again').disabled = last.mode === 'mist' && !pool().some(c => c.mist);
   go('result');
 }
@@ -450,6 +519,9 @@ $('r-menu').onclick = () => go('play');
 document.querySelectorAll('[data-timed]').forEach(b => b.onclick = () => startGame('timed', +b.dataset.timed));
 $('go-train').onclick = () => startGame('train');
 $('go-mist').onclick = () => startGame('mist');
+$('go-verbs').onclick = () => startGame('topic', 'verbs');
+$('go-nums').onclick = () => startGame('topic', 'nums');
+document.querySelectorAll('[data-recent]').forEach(b => b.onclick = () => startGame('topic', 'r' + b.dataset.recent));
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && G && G.mode === 'timed' && !G.over && G.start) tick();
 });
@@ -576,7 +648,71 @@ $('b-reset').onclick = () => {
   db = blank(); save(); bindSettings(); $('m-backup').textContent = 'Silindi.';
 };
 
+/* ---------------- otomatik senkron ----------------
+   GitHub Actions haftada bir Duolingo'dan words.json üretir. Uygulama açılışta
+   (ve uzun süre arka planda kaldıktan sonra) bu dosyayı okuyup yeni kelimeleri ekler.
+   GitHub Pages'te çalışırken dosya raw.githubusercontent.com'dan alınır: Pages
+   yeniden yayınlanmayı beklemeden her zaman repodaki son hali gelir. */
+const SYNC_URL = (() => {
+  const m = location.hostname.match(/^([^.]+)\.github\.io$/);
+  const repo = location.pathname.split('/').filter(Boolean)[0];
+  return m && repo ? `https://raw.githubusercontent.com/${m[1]}/${repo}/main/words.json` : 'words.json';
+})();
+const SYNC_EVERY = 6 * 3600 * 1000;
+
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 3200);
+}
+function importWords(list) {
+  return importRows(list.map(w => {
+    const [es, tr, alt, sec, no, title] = w;
+    const unit = sec ? `${sec}. Kısım ${no}. Ünite – ${title}` : '';
+    return [es, tr, [alt, unit].filter(Boolean).join(' | ')];
+  }));
+}
+function fmtDate(iso) {
+  try { return new Date(iso).toLocaleString('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }); } catch { return iso; }
+}
+function syncInfo(err) {
+  const el = $('sync-info'); if (!el) return;
+  const s = db.sync;
+  if (!s) { el.textContent = err ? 'Kelime listesine ulaşılamadı. İnternet bağlantını kontrol et.' : 'Henüz senkron yapılmadı.'; return; }
+  el.textContent = `Son güncelleme: ${fmtDate(s.updated)} · ${s.count} kelime` +
+    (s.lastUnit ? `\nDuolingo'daki yerin: ${s.lastUnit.sec}. Kısım ${s.lastUnit.no}. Ünite` : '') +
+    `\nGüncellemeler haftada bir otomatik gelir; uygulama açılınca eklenir.` + (err ? '\n(Son kontrol başarısız oldu.)' : '');
+}
+let syncing = false;
+async function autoSync(manual) {
+  if (syncing) return; syncing = true;
+  try {
+    const r = await fetch(SYNC_URL + (SYNC_URL.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    if (!Array.isArray(d.words)) throw new Error('biçim');
+    db.syncChecked = Date.now();
+    if (!db.sync || db.sync.updated !== d.updated || manual) {
+      const res = importWords(d.words);
+      db.sync = { updated: d.updated, count: d.words.length, lastUnit: d.lastUnit || null };
+      save();
+      if (res.added) toast(`${res.added} yeni kelime eklendi 🎉`);
+      else if (manual) toast('Yeni kelime yok, liste güncel.');
+      refreshAll();
+    } else { save(); if (manual) toast('Yeni kelime yok, liste güncel.'); }
+    syncInfo();
+  } catch (e) {
+    syncInfo(true);
+    if (manual) toast('Güncelleme alınamadı.');
+  } finally { syncing = false; }
+}
+$('b-sync').onclick = () => autoSync(true);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && !G && Date.now() - (db.syncChecked || 0) > SYNC_EVERY) autoSync(false);
+});
+
 /* ---------------- başlat ---------------- */
 load();
 go('play');
+syncInfo();
+autoSync(false);
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});

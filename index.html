@@ -45,6 +45,22 @@
       </button>
       <p class="note" id="play-empty" hidden>Henüz kelime yok. ⚙︎ Ayarlar → CSV dosyası seç.</p>
 
+      <h2 class="sec">Son üniteler</h2>
+      <div class="timed">
+        <button class="tile" data-recent="3"><b>Son 3</b><small>–</small></button>
+        <button class="tile" data-recent="5"><b>Son 5</b><small>–</small></button>
+        <button class="tile" data-recent="7"><b>Son 7</b><small>–</small></button>
+      </div>
+      <p class="note" id="recent-note"></p>
+
+      <h2 class="sec">Konular</h2>
+      <button class="row-btn" id="go-verbs">
+        <span><b>Fiiller</b><small id="verbs-sub">–</small></span><i>›</i>
+      </button>
+      <button class="row-btn" id="go-nums">
+        <span><b>Sayılar</b><small id="nums-sub">–</small></span><i>›</i>
+      </button>
+
       <h2 class="sec">Hatalarım</h2>
       <div class="panel mist-panel">
         <button class="mist-play" id="go-mist">Hatalarımı çalış <span id="mist-count">0</span></button>
@@ -120,10 +136,15 @@
   <section class="view" id="v-settings">
     <div class="scroll">
       <div class="panel">
-        <h2>Kelime ekle</h2>
+        <h2>Otomatik güncelleme</h2>
+        <p class="note" id="sync-info">Kontrol ediliyor…</p>
+        <button class="btn" id="b-sync">Şimdi kontrol et</button>
+      </div>
+      <div class="panel">
+        <h2>Elle kelime ekle</h2>
         <label class="btn" for="f-csv">CSV dosyası seç</label>
         <input type="file" id="f-csv" accept=".csv,.txt,text/csv,text/plain">
-        <p class="note">Duolingo script'inin ürettiği front,back,hint dosyası. Mevcut kelimelerin ilerlemesi korunur, sadece yeniler eklenir.</p>
+        <p class="note">front,back,hint biçiminde dosya. Mevcut kelimelerin ilerlemesi korunur, sadece yeniler eklenir.</p>
         <p class="note" id="m-import"></p>
       </div>
       <div class="panel">
@@ -176,6 +197,7 @@
     </div>
   </section>
 </main>
+<div id="toast" hidden></div>
 <script src="app.js"></script>
 </body>
 </html>
