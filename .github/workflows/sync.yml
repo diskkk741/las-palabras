@@ -1,0 +1,41 @@
+name: Duolingo kelime senkronu
+
+on:
+  schedule:
+    - cron: '0 5 * * 1'      # her pazartesi 08:00 (Türkiye saati)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: duolingo-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Duolingo'dan kelimeleri çek
+        run: node scripts/sync.mjs
+        env:
+          DUO_JWT: ${{ secrets.DUO_JWT }}
+
+      - name: Değişiklik varsa commit'le
+        run: |
+          if git diff --quiet -- words.json && git ls-files --error-unmatch words.json >/dev/null 2>&1; then
+            echo "Yeni kelime yok."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add words.json
+          git commit -m "Kelime listesi güncellendi ($(date -u +%Y-%m-%d))"
+          git push
