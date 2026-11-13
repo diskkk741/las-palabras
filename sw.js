@@ -1,7 +1,7 @@
 // Basit önbellek: uygulama internetsiz de açılır.
 // Dosyaları güncellediğinde VERSION'ı artır ki telefona yeni sürüm gelsin.
-const VERSION = 'palabras-v13';
-const FILES = ['./', 'index.html', 'style.css', 'app.js', 'tags.json', 'modes.js', 'conj.json', 'manifest.webmanifest',
+const VERSION = 'palabras-v14';
+const FILES = ['./', 'index.html', 'style.css', 'app.js', 'tags.json', 'modes.js', 'ui.js', 'conj.json', 'manifest.webmanifest',
   'icon-180.png', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {

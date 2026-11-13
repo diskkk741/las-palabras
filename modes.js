@@ -15,7 +15,7 @@ const TENSE_TR = { pres: 'şimdiki', pret: 'geçmiş (-di)', imp: 'geçmiş (-iy
 let CONJ = {};
 async function loadConj() {
   for (const url of [RAW_BASE && RAW_BASE + 'conj.json?t=' + Date.now(), 'conj.json'].filter(Boolean)) {
-    try { const r = await fetch(url, { cache: 'no-store' }); if (r.ok) { CONJ = await r.json(); if (view === 'play') renderMenu(); return; } } catch {}
+    try { const r = await fetch(url, { cache: 'no-store' }); if (r.ok) { CONJ = await r.json(); if (isMenu(view)) renderMenu(); return; } } catch {}
   }
 }
 loadConj();
@@ -193,7 +193,7 @@ function mcEnd() {
 
 $('mc-quit').onclick = () => {
   if (M && M.i > 0 && !confirm('Çıkılsın mı? Cevapladıkların kaydedildi.')) return;
-  M = null; go('play');
+  M = null; go(lastTab);
 };
 $('go-listen').onclick = () => mcStart('listen');
 document.querySelectorAll('[data-conj]').forEach(b => b.onclick = () => mcStart('conj', b.dataset.conj));
@@ -280,7 +280,7 @@ async function cloudSync(reason) {
     cloudMuted = true; save(); cloudMuted = false;
     await gh('/gists/' + id, { method: 'PATCH', keepalive: reason === 'hide', body: JSON.stringify({ files: { [GIST_FILE]: { content: JSON.stringify(payload()) } } }) });
     cloudLast = Date.now(); ls.set('palabras.cloudLast', String(cloudLast));
-    if (changed) { if (view === 'play') renderMenu(); if (view === 'words') renderList(); }
+    if (changed) { if (isMenu(view)) renderMenu(); if (view === 'words') renderList(); }
     if (reason === 'manual') toast(changed ? 'Eşitlendi: buluttan ilerleme alındı ✓' : 'Eşitlendi ✓');
   } catch (e) {
     if (e.status === 401) { cloudInfo('Token geçersiz ya da süresi dolmuş. Yeniden bağlan.'); return; }
@@ -327,5 +327,5 @@ document.addEventListener('visibilitychange', () => {
 
 /* ---------------- başlat ---------------- */
 cloudInfo();
-if (view === 'play') renderMenu();
+if (isMenu(view)) renderMenu();
 setTimeout(() => cloudSync('open'), 2500);   // önce kelime senkronu bitsin

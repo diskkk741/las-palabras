@@ -5,100 +5,151 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cut,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Palabras">
-<meta name="theme-color" content="#14181f">
+<meta name="theme-color" content="#F4F6FB" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B1020" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&display=swap">
 <link rel="stylesheet" href="style.css">
 <title>Palabras</title>
 </head>
 <body>
+<!-- simgeler -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3.5 10.5 12 3.8l8.5 6.7V19a1.5 1.5 0 0 1-1.5 1.5h-4.2v-6h-5.6v6H5A1.5 1.5 0 0 1 3.5 19z"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13.2 2.8 4.8 13.4h6.4l-1.4 7.8 8.4-10.6h-6.4z"/></symbol>
+    <symbol id="i-cards" viewBox="0 0 24 24"><rect x="6.5" y="3.5" width="13" height="16" rx="2.5"/><path d="M4.5 7.5v11a2 2 0 0 0 2 2h9"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H10a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H14a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h6z"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></symbol>
+    <symbol id="i-timer" viewBox="0 0 24 24"><circle cx="12" cy="13.5" r="7"/><path d="M12 13.5V10M9.5 2.8h5M18.4 6.6l1.4-1.4"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4.2"/><circle cx="12" cy="12" r=".8"/></symbol>
+    <symbol id="i-ear" viewBox="0 0 24 24"><path d="M4.5 14v-2a7.5 7.5 0 0 1 15 0v2"/><rect x="3.5" y="13.5" width="4" height="6.5" rx="1.6"/><rect x="16.5" y="13.5" width="4" height="6.5" rx="1.6"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-stack" viewBox="0 0 24 24"><path d="m12 3.5 8.5 4.3L12 12 3.5 7.8z"/><path d="m3.5 12.2 8.5 4.3 8.5-4.3"/><path d="m3.5 16.5 8.5 4.2 8.5-4.2"/></symbol>
+    <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20h4L19.2 8.8a2.3 2.3 0 0 0-3.2-3.2L4.8 16.8z"/><path d="m14.5 7 3 3"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9.5 5.5 6.5 6.5-6.5 6.5"/></symbol>
+    <symbol id="i-retry" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.4-5.5"/><path d="M4.5 4.2v4.3h4.3"/></symbol>
+    <symbol id="i-flame" viewBox="0 0 24 24"><path d="M12 21c-3.9 0-6.5-2.7-6.5-6.3 0-3.8 3.4-6 4.3-10.2 2.7 1.8 4 4.2 4 6.6 1-.6 1.6-1.8 1.8-3 1.8 1.6 2.9 4 2.9 6.6 0 3.6-2.6 6.3-6.5 6.3z"/></symbol>
+  </defs>
+</svg>
+
 <header id="top">
-  <h1>Pala<span>bras</span></h1>
+  <div class="hdr-l">
+    <h1 id="page-title">Bugün</h1>
+    <p class="hdr-date" id="page-sub"></p>
+  </div>
   <div class="hdr-sync" id="hdr-sync"></div>
 </header>
-<nav id="tabs">
-  <button data-v="play" class="on"><i>🎯</i>Oyna</button>
-  <button data-v="cards"><i>🃏</i>Kartlar</button>
-  <button data-v="words"><i>📖</i>Kelimeler</button>
-  <button data-v="settings"><i>⚙︎</i>Ayarlar</button>
-</nav>
 
 <main>
-  <!-- OYUN MENÜSÜ -->
-  <section class="view on" id="v-play">
+  <!-- BUGÜN -->
+  <section class="view on" id="v-home">
     <div class="scroll">
-      <div class="stats">
-        <div class="stat"><b id="st-total">0</b><small>Kelime</small></div>
-        <div class="stat"><b id="st-due">0</b><small>Bugün tekrar</small></div>
-        <div class="stat"><b id="st-known">0</b><small>Öğrenilmiş</small></div>
-      </div>
-      <div class="streak" id="streak-row">
-        <span>🔥 <b id="st-streak">0</b> gün seri</span>
-        <span class="week" id="st-week" aria-label="Son 7 gün"></span>
-        <span>Bu hafta <b id="st-wk">0</b></span>
-      </div>
-      <h2 class="sec">Süreli oyun</h2>
-      <div class="timed">
-        <button class="tile" data-timed="60"><b>1 dk</b><small>Rekor <span data-rec="60">–</span></small></button>
-        <button class="tile" data-timed="180"><b>3 dk</b><small>Rekor <span data-rec="180">–</span></small></button>
-        <button class="tile" data-timed="300"><b>5 dk</b><small>Rekor <span data-rec="300">–</span></small></button>
-      </div>
-      <h2 class="sec">Çalışma</h2>
-      <button class="row-btn" id="go-train">
-        <span><b>Antrenman</b><small>20 kelime · önce tekrarı gelenler ve yeniler</small></span><i>›</i>
-      </button>
-      <p class="note" id="play-empty" hidden>Henüz kelime yok. ⚙︎ Ayarlar → CSV dosyası seç.</p>
-
-      <h2 class="sec">Son üniteler</h2>
-      <div class="timed">
-        <button class="tile" data-recent="3"><b>Son 3</b><small class="cnt">–</small><small class="rec">–</small></button>
-        <button class="tile" data-recent="5"><b>Son 5</b><small class="cnt">–</small><small class="rec">–</small></button>
-        <button class="tile" data-recent="7"><b>Son 7</b><small class="cnt">–</small><small class="rec">–</small></button>
-      </div>
-      <p class="note" id="recent-note"></p>
-
-      <h2 class="sec">Dinleme</h2>
-      <button class="row-btn" id="go-listen">
-        <span><b>🎧 Dinle ve seç</b><small id="listen-sub">Kelimeyi duy, Türkçesini seç · 20 soru</small></span><i>›</i>
-      </button>
-
-      <h2 class="sec">Fiil çekimi</h2>
-      <div class="conj-grid">
-        <button class="tile" data-conj="pres"><b>Presente</b><small>şimdiki</small></button>
-        <button class="tile" data-conj="pret"><b>Pretérito</b><small>geçmiş (-di)</small></button>
-        <button class="tile" data-conj="imp"><b>Imperfecto</b><small>geçmiş (-iyordu)</small></button>
-        <button class="tile" data-conj="fut"><b>Futuro</b><small>gelecek</small></button>
-        <button class="tile wide" data-conj="mix"><b>Karışık</b><small id="conj-sub">4 zaman · 20 soru</small></button>
+      <div class="hero">
+        <div class="hero-top">
+          <div class="flame"><svg><use href="#i-flame"/></svg><b id="st-streak">0</b><span>günlük seri</span></div>
+          <div class="week-wrap">
+            <div class="week" id="st-week" aria-label="Son 7 gün"></div>
+            <div class="week-days" id="week-days"></div>
+          </div>
+        </div>
+        <h2 class="hero-title">Günün antrenmanı</h2>
+        <p class="hero-sub" id="hero-sub">20 kelime, önce tekrarı gelenler</p>
+        <button class="hero-cta" id="go-train">Başla</button>
+        <p class="hero-foot">Bu hafta <b id="st-wk">0</b> doğru cevap</p>
       </div>
 
-      <h2 class="sec">Konular</h2>
-      <button class="row-btn" id="go-verbs">
-        <span><b>Fiiller</b><small id="verbs-sub">–</small></span><i>›</i>
-      </button>
-
-      <h2 class="sec">Sayılar</h2>
-      <div class="num-grid">
-        <button class="tile" data-numtopic="nums"><b>1–1000</b><small class="rec">–</small></button>
-        <button class="tile" data-numtopic="times"><b>Saatler</b><small class="rec">–</small></button>
-        <button class="tile" data-numtopic="ords"><b>Sıra</b><small class="rec">–</small></button>
-        <button class="tile" data-numtopic="dates"><b>Tarihler</b><small class="rec">–</small></button>
+      <div class="quick">
+        <button class="qk" data-go="timed60"><span class="ic c-saffron"><svg><use href="#i-timer"/></svg></span><b>1 dakika</b><small id="qk-timed">Rekor –</small></button>
+        <button class="qk" data-go="listen"><span class="ic c-blue"><svg><use href="#i-ear"/></svg></span><b>Dinle</b><small id="qk-listen">20 soru</small></button>
+        <button class="qk" data-go="mist"><span class="ic c-red"><svg><use href="#i-retry"/></svg></span><b>Hatalarım</b><small id="qk-mist">Hata yok</small></button>
+        <button class="qk" data-go="r3"><span class="ic c-green"><svg><use href="#i-stack"/></svg></span><b>Son 3 ünite</b><small id="qk-r3">–</small></button>
       </div>
 
-      <h2 class="sec">Hatalarım</h2>
-      <div class="panel mist-panel">
-        <button class="mist-play" id="go-mist">Hatalarımı çalış <span id="mist-count">0</span></button>
-        <div id="mist-list"></div>
-        <button class="btn" id="mist-more" hidden></button>
+      <div class="figures">
+        <div><b id="st-total">0</b><span>kelime</span></div>
+        <div><b id="st-known">0</b><span>öğrenilmiş</span></div>
+        <div><b id="st-due">0</b><span>bugün tekrar</span></div>
       </div>
+
+      <section class="block">
+        <div class="block-h">
+          <h3>Hatalarım</h3>
+          <button class="pill-btn" id="go-mist">Çalış <span id="mist-count">0</span></button>
+        </div>
+        <div class="group" id="mist-list"></div>
+        <button class="btn ghost" id="mist-more" hidden></button>
+      </section>
     </div>
   </section>
 
-  <!-- OYUN EKRANI -->
+  <!-- PRATİK -->
+  <section class="view" id="v-play">
+    <div class="scroll">
+      <p class="note" id="play-empty" hidden>Henüz kelime yok. Ayarlar'dan güncellemeyi kontrol et.</p>
+
+      <section class="block">
+        <h3>Eşleştirme</h3>
+        <div class="seg seg-3">
+          <button class="seg-b" data-timed="60"><b>1 dk</b><small>Rekor <span data-rec="60">–</span></small></button>
+          <button class="seg-b" data-timed="180"><b>3 dk</b><small>Rekor <span data-rec="180">–</span></small></button>
+          <button class="seg-b" data-timed="300"><b>5 dk</b><small>Rekor <span data-rec="300">–</span></small></button>
+        </div>
+        <div class="group">
+          <button class="row" data-go="train"><span class="ic c-blue"><svg><use href="#i-target"/></svg></span><span class="row-t"><b>Antrenman</b><small>20 kelime, önce tekrarı gelenler</small></span><svg class="chev"><use href="#i-chev"/></svg></button>
+          <button class="row" id="go-verbs"><span class="ic c-violet"><svg><use href="#i-pen"/></svg></span><span class="row-t"><b>Fiiller</b><small id="verbs-sub">–</small></span><svg class="chev"><use href="#i-chev"/></svg></button>
+        </div>
+      </section>
+
+      <section class="block">
+        <h3>Son üniteler</h3>
+        <div class="seg seg-3">
+          <button class="seg-b" data-recent="3"><b>Son 3</b><small class="cnt">–</small><small class="rec">–</small></button>
+          <button class="seg-b" data-recent="5"><b>Son 5</b><small class="cnt">–</small><small class="rec">–</small></button>
+          <button class="seg-b" data-recent="7"><b>Son 7</b><small class="cnt">–</small><small class="rec">–</small></button>
+        </div>
+        <p class="block-note" id="recent-note"></p>
+      </section>
+
+      <section class="block">
+        <h3>Dinleme</h3>
+        <div class="group">
+          <button class="row" id="go-listen"><span class="ic c-blue"><svg><use href="#i-ear"/></svg></span><span class="row-t"><b>Dinle ve seç</b><small id="listen-sub">–</small></span><svg class="chev"><use href="#i-chev"/></svg></button>
+        </div>
+      </section>
+
+      <section class="block">
+        <h3>Fiil çekimi</h3>
+        <div class="seg seg-conj">
+          <button class="seg-b" data-conj="pres"><b>Presente</b><small>şimdiki</small></button>
+          <button class="seg-b" data-conj="pret"><b>Pretérito</b><small>geçmiş (-di)</small></button>
+          <button class="seg-b" data-conj="imp"><b>Imperfecto</b><small>geçmiş (-iyordu)</small></button>
+          <button class="seg-b" data-conj="fut"><b>Futuro</b><small>gelecek</small></button>
+          <button class="seg-b wide" data-conj="mix"><b>Karışık</b><small id="conj-sub">–</small></button>
+        </div>
+      </section>
+
+      <section class="block">
+        <h3>Sayılar</h3>
+        <div class="seg seg-4">
+          <button class="seg-b" data-numtopic="nums"><b>1–1000</b><small class="rec">–</small></button>
+          <button class="seg-b" data-numtopic="times"><b>Saatler</b><small class="rec">–</small></button>
+          <button class="seg-b" data-numtopic="ords"><b>Sıra</b><small class="rec">–</small></button>
+          <button class="seg-b" data-numtopic="dates"><b>Tarihler</b><small class="rec">–</small></button>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <!-- EŞLEŞTİRME OYUNU -->
   <section class="view" id="v-game">
     <div class="gbar">
-      <button class="x" id="g-quit" aria-label="Çık">✕</button>
+      <button class="x" id="g-quit" aria-label="Oyundan çık"><svg><use href="#i-x"/></svg></button>
       <div class="gmid">
         <div class="time" id="g-time"></div>
         <div class="prog" id="g-prog"><i></i></div>
@@ -109,10 +160,10 @@
     <div class="count" id="g-count" hidden></div>
   </section>
 
-  <!-- ÇOKTAN SEÇMELİ (dinleme, fiil çekimi) — eşleştirme oyunundan ayrı ekran -->
+  <!-- ÇOKTAN SEÇMELİ (dinleme, fiil çekimi) -->
   <section class="view" id="v-mc">
     <div class="gbar">
-      <button class="x" id="mc-quit" aria-label="Çık">✕</button>
+      <button class="x" id="mc-quit" aria-label="Çık"><svg><use href="#i-x"/></svg></button>
       <div class="gmid"><div class="prog" id="mc-prog"><i></i></div></div>
       <div class="score"><b id="mc-score">0</b><small id="mc-combo"></small></div>
     </div>
@@ -125,26 +176,28 @@
 
   <!-- SONUÇ -->
   <section class="view" id="v-result">
-    <div class="scroll">
+    <div class="scroll result-scroll">
       <div class="result">
         <div class="r-title" id="r-title"></div>
         <div class="r-big" id="r-big"></div>
         <div class="r-sub" id="r-sub"></div>
       </div>
       <button class="big" id="r-again">Tekrar oyna</button>
-      <button class="btn" id="r-menu">Menüye dön</button>
+      <button class="btn ghost" id="r-menu">Kapat</button>
     </div>
   </section>
 
-  <!-- KART MODU -->
+  <!-- KARTLAR -->
   <section class="view" id="v-cards">
-    <div class="stats">
-      <div class="stat"><b id="c-due">0</b><small>Tekrar</small></div>
-      <div class="stat"><b id="c-new">0</b><small>Yeni (bugün)</small></div>
+    <div class="card-meta">
+      <span><b id="c-due">0</b> tekrar</span>
+      <span><b id="c-new">0</b> yeni</span>
     </div>
     <div class="fcard" id="fcard">
       <div class="u" id="fc-unit"></div>
-      <button class="speak" id="fc-speak" aria-label="Seslendir">🔊</button>
+      <button class="speak" id="fc-speak" aria-label="Seslendir">
+        <svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>
+      </button>
       <div class="q" id="fc-q"></div>
       <div class="tag" id="fc-tag"></div>
       <div class="a" id="fc-a"></div>
@@ -163,7 +216,7 @@
 
   <!-- KELİMELER -->
   <section class="view" id="v-words">
-    <input id="search" placeholder="Ara (İspanyolca ya da Türkçe)" autocomplete="off" autocapitalize="off">
+    <input id="search" type="search" placeholder="İspanyolca ya da Türkçe ara" autocomplete="off" autocapitalize="off">
     <div class="chips">
       <button class="chip on" data-f="all">Tümü</button>
       <button class="chip" data-f="mist">Hatalarım</button>
@@ -181,55 +234,24 @@
         <button class="btn" id="b-sync">Şimdi kontrol et</button>
       </div>
       <div class="panel">
-        <h2>Elle kelime ekle</h2>
-        <label class="btn" for="f-csv">CSV dosyası seç</label>
-        <input type="file" id="f-csv" accept=".csv,.txt,text/csv,text/plain">
-        <p class="note">front,back,hint biçiminde dosya. Mevcut kelimelerin ilerlemesi korunur, sadece yeniler eklenir.</p>
-        <p class="note" id="m-import"></p>
-      </div>
-      <div class="panel">
         <h2>Tercihler</h2>
-        <div class="row"><label for="o-sec">Kelime havuzu</label><select id="o-sec"></select></div>
-        <div class="row"><label for="o-new">Günlük yeni kelime</label><input type="number" id="o-new" min="0" max="500"></div>
-        <div class="row"><label for="o-dir">Kart yönü</label>
+        <div class="row-s"><label for="o-sec">Kelime havuzu</label><select id="o-sec"></select></div>
+        <div class="row-s"><label for="o-new">Kartlar'da günlük yeni kelime</label><input type="number" id="o-new" min="0" max="500"></div>
+        <div class="row-s"><label for="o-dir">Kart yönü</label>
           <select id="o-dir">
             <option value="es">İspanyolca → Türkçe</option>
             <option value="tr">Türkçe → İspanyolca</option>
             <option value="mix">Karışık</option>
           </select></div>
-        <div class="row"><label for="o-tts">Dokununca seslendir</label>
+        <div class="row-s"><label for="o-tts">Dokununca seslendir</label>
           <select id="o-tts"><option value="1">Açık</option><option value="0">Kapalı</option></select></div>
-        <div class="row"><label for="o-tags">Kelime türü etiketi</label>
+        <div class="row-s"><label for="o-tags">Kelime türü etiketi</label>
           <select id="o-tags"><option value="1">Göster</option><option value="0">Gizle</option></select></div>
-        <div class="row"><label for="o-art">Artikel (el / la)</label>
+        <div class="row-s"><label for="o-art">Artikel (el / la)</label>
           <select id="o-art"><option value="1">Göster</option><option value="0">Gizle</option></select></div>
       </div>
       <div class="panel">
-        <h2>Etiketler</h2>
-        <div class="legend">
-          <span><b>m.</b> sustantivo masculino</span>
-          <span><b>f.</b> sustantivo femenino</span>
-          <span><b>m./f.</b> her iki cinsiyet</span>
-          <span><b>pl.</b> plural (çoğul)</span>
-          <span><b>adj.</b> adjetivo</span>
-          <span><b>v.</b> verbo (parantezde mastar)</span>
-          <span><b>v. prnl.</b> verbo pronominal (-se)</span>
-          <span><b>part.</b> participio</span>
-          <span><b>adv.</b> adverbio</span>
-          <span><b>prep.</b> preposición</span>
-          <span><b>conj.</b> conjunción</span>
-          <span><b>pron.</b> pronombre</span>
-          <span><b>det.</b> determinante</span>
-          <span><b>art.</b> artículo</span>
-          <span><b>contr.</b> contracción</span>
-          <span><b>num.</b> numeral</span>
-          <span><b>interr.</b> interrogativo</span>
-          <span><b>interj.</b> interjección</span>
-          <span><b>loc.</b> locución (kalıp ifade)</span>
-        </div>
-      </div>
-      <div class="panel">
-        <h2>Bulut yedeği (GitHub)</h2>
+        <h2>Bulut yedeği</h2>
         <p class="note" id="cloud-info">Bağlı değil. İlerlemen sadece bu cihazda.</p>
         <div id="cloud-off">
           <input type="password" id="cloud-token" placeholder="GitHub token (gist izni)" autocomplete="off" autocapitalize="off" spellcheck="false">
@@ -241,7 +263,38 @@
         </div>
       </div>
       <div class="panel">
-        <h2>Yedek</h2>
+        <h2>Kelime türü etiketleri</h2>
+        <div class="legend">
+          <span><b>m.</b> eril isim</span>
+          <span><b>f.</b> dişil isim</span>
+          <span><b>m./f.</b> iki cinsiyetli</span>
+          <span><b>pl.</b> çoğul</span>
+          <span><b>adj.</b> sıfat</span>
+          <span><b>v.</b> fiil (parantezde mastar)</span>
+          <span><b>v. prnl.</b> dönüşlü fiil (-se)</span>
+          <span><b>part.</b> ortaç</span>
+          <span><b>adv.</b> zarf</span>
+          <span><b>prep.</b> edat</span>
+          <span><b>conj.</b> bağlaç</span>
+          <span><b>pron.</b> zamir</span>
+          <span><b>det.</b> belirleyici</span>
+          <span><b>art.</b> artikel</span>
+          <span><b>contr.</b> kaynaşma (al, del)</span>
+          <span><b>num.</b> sayı</span>
+          <span><b>interr.</b> soru sözcüğü</span>
+          <span><b>interj.</b> ünlem</span>
+          <span><b>loc.</b> kalıp ifade</span>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Elle kelime ekle</h2>
+        <label class="btn" for="f-csv">CSV dosyası seç</label>
+        <input type="file" id="f-csv" accept=".csv,.txt,text/csv,text/plain">
+        <p class="note">front, back, hint sütunlu dosya. Mevcut ilerleme korunur, sadece yeni kelimeler eklenir.</p>
+        <p class="note" id="m-import"></p>
+      </div>
+      <div class="panel">
+        <h2>Dosya yedeği</h2>
         <button class="btn" id="b-export">Yedeği indir (JSON)</button>
         <label class="btn" for="f-backup">Yedekten geri yükle</label>
         <input type="file" id="f-backup" accept=".json,application/json">
@@ -251,8 +304,18 @@
     </div>
   </section>
 </main>
+
+<nav id="tabs" aria-label="Ana menü">
+  <button data-v="home" class="on"><span class="ti"><svg><use href="#i-home"/></svg></span>Bugün</button>
+  <button data-v="play"><span class="ti"><svg><use href="#i-bolt"/></svg></span>Pratik</button>
+  <button data-v="cards"><span class="ti"><svg><use href="#i-cards"/></svg></span>Kartlar</button>
+  <button data-v="words"><span class="ti"><svg><use href="#i-book"/></svg></span>Kelimeler</button>
+  <button data-v="settings"><span class="ti"><svg><use href="#i-gear"/></svg></span>Ayarlar</button>
+</nav>
+
 <div id="toast" hidden></div>
 <script src="app.js"></script>
 <script src="modes.js"></script>
+<script src="ui.js"></script>
 </body>
 </html>

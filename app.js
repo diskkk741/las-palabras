@@ -281,19 +281,24 @@ function speak(text, force, slow) {
 }
 
 /* ---------------- navigasyon ---------------- */
-let view = 'play';
+let view = 'home';
+const TABS = ['home', 'play', 'cards', 'words', 'settings'];
+let lastTab = 'home';            // oyundan çıkınca dönülecek sekme
+const isMenu = v => v === 'play' || v === 'home';
 function go(v) {
   view = v;
-  document.body.classList.toggle('ingame', v === 'game' || v === 'mc');
+  if (TABS.includes(v)) lastTab = v;
+  document.body.classList.toggle('ingame', v === 'game' || v === 'mc' || v === 'result');
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
   document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
-  if (v === 'play') renderMenu();
+  if (typeof onView === 'function') onView(v);
+  if (isMenu(v)) renderMenu();
   if (v === 'cards') fcStart();
   if (v === 'words') renderList();
   if (v === 'settings') { bindSettings(); syncInfo(); }
 }
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => go(b.dataset.v));
-function refreshAll() { if (view === 'play') renderMenu(); if (view === 'words') renderList(); }
+function refreshAll() { if (isMenu(view)) renderMenu(); if (view === 'words') renderList(); }
 
 /* ---------------- menü ---------------- */
 function renderMenu() {
@@ -332,6 +337,7 @@ function renderTopics() {
   }
   const top = [...recentUnits(1)][0];
   if (typeof renderExtras === 'function') renderExtras();
+  if (typeof renderHome === 'function') renderHome();
   $('recent-note').textContent = top ? `En son ünite: ${unitLabel(top)} · 90 saniyelik oyun, sadece seçilen ünitelerin kelimeleri.` : '';
 }
 
@@ -617,12 +623,12 @@ function endGame() {
   go('result');
 }
 function quitGame() {
-  if (!G) return go('play');
+  if (!G) return go(lastTab);
   if (!G.over && (G.score || G.wrong) && !confirm('Oyundan çıkılsın mı? İlerlemen kaydedildi, skor sayılmaz.')) return;
-  clearInterval(G.timer); G.over = true; G = null; go('play');
+  clearInterval(G.timer); G.over = true; G = null; go(lastTab);
 }
 $('g-quit').onclick = quitGame;
-$('r-menu').onclick = () => go('play');
+$('r-menu').onclick = () => go(lastTab);
 document.querySelectorAll('[data-timed]').forEach(b => b.onclick = () => startGame('timed', +b.dataset.timed));
 $('go-train').onclick = () => startGame('train');
 $('go-mist').onclick = () => startGame('mist');
@@ -834,7 +840,7 @@ document.addEventListener('visibilitychange', () => {
 
 /* ---------------- başlat ---------------- */
 load();
-go('play');
+go('home');
 syncInfo();
 autoSync(false);
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
