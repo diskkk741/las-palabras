@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write            # words.json, tags.json, examples.json, conj.json'u commit'lemek için
-  models: read               # GitHub Models (ücretsiz yapay zekâ) ile etiketleme / örnek cümle için
 
 concurrency:
   group: duolingo-sync
@@ -29,11 +28,11 @@ jobs:
         env:
           DUO_JWT: ${{ secrets.DUO_JWT }}
 
-      - name: Yeni kelimeleri etiketle + örnek cümleler
+      - name: Yeni kelimeleri etiketle + örnek cümleler (Google Gemini, ücretsiz)
         continue-on-error: true
         run: node scripts/tag.mjs
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
       - uses: actions/setup-python@v5
         with:
