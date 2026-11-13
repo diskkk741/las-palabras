@@ -92,13 +92,17 @@ function unitLabel(key) { return `${Math.floor(key / 1000)}. Kısım ${key % 100
 
 /* ---------------- konu havuzları ----------------
    Her konu: başlık, kart deposu (kelimeler ya da sayılar), havuz ve tur destesi. */
+// secs olan konular süreli oynanır (geri sayım + konuya özel rekor); olmayanlar 20'lik tur.
+const TOPIC_SECS = 90;
 const TOPICS = {
-  verbs: { title: 'Fiiller', store: () => db.cards, pool: () => pool().filter(isVerb), deck: p => buildTrainDeck(p) },
+  verbs: { title: 'Fiiller', secs: TOPIC_SECS, store: () => db.cards, pool: () => pool().filter(isVerb) },
   nums:  { title: 'Sayılar', store: () => db.nums, pool: () => { ensureNums(); return Object.values(db.nums); }, deck: p => buildTrainDeck(p) },
-  r3:    { title: 'Son 3 ünite', store: () => db.cards, pool: () => recentPool(3), deck: p => shuffle(p.slice()).map(c => ({ es: c.es, filler: false })) },
-  r5:    { title: 'Son 5 ünite', store: () => db.cards, pool: () => recentPool(5), deck: p => shuffle(p.slice()).map(c => ({ es: c.es, filler: false })) },
-  r7:    { title: 'Son 7 ünite', store: () => db.cards, pool: () => recentPool(7), deck: p => shuffle(p.slice()).map(c => ({ es: c.es, filler: false })) },
+  r3:    { title: 'Son 3 ünite', secs: TOPIC_SECS, store: () => db.cards, pool: () => recentPool(3) },
+  r5:    { title: 'Son 5 ünite', secs: TOPIC_SECS, store: () => db.cards, pool: () => recentPool(5) },
+  r7:    { title: 'Son 7 ünite', secs: TOPIC_SECS, store: () => db.cards, pool: () => recentPool(7) },
 };
+const recKey = id => 'topic-' + id;
+const recOf = key => db.records[key] ? db.records[key].best : null;
 
 /* ---------------- CSV import ---------------- */
 function parseCSV(text) {
@@ -212,7 +216,8 @@ function renderMenu() {
 
 function renderTopics() {
   const vp = TOPICS.verbs.pool();
-  $('verbs-sub').textContent = `${vp.length} fiil · 20'lik tur, mastarıyla birlikte` + (vp.some(c => c.mist) ? ` · ${vp.filter(c => c.mist).length} hata` : '');
+  const vr = recOf(recKey('verbs'));
+  $('verbs-sub').textContent = `${vp.length} fiil · 90 sn · Rekor ${vr ?? '–'}` + (vp.some(c => c.mist) ? ` · ${vp.filter(c => c.mist).length} hata` : '');
   $('go-verbs').disabled = vp.length < 2;
   const np = TOPICS.nums.pool();
   const nm = np.filter(c => c.mist).length;
@@ -222,10 +227,11 @@ function renderTopics() {
     const cnt = recentPool(n).length;
     const b = document.querySelector(`[data-recent="${n}"]`);
     b.disabled = cnt < 2;
-    b.querySelector('small').textContent = cnt ? `${cnt} kelime` : '–';
+    b.querySelector('.cnt').textContent = cnt ? `${cnt} kelime` : '–';
+    b.querySelector('.rec').textContent = `Rekor ${recOf(recKey('r' + n)) ?? '–'}`;
   }
   const top = [...recentUnits(1)][0];
-  $('recent-note').textContent = top ? `En son ünite: ${unitLabel(top)}. Turda seçilen ünitelerin bütün kelimeleri gelir.` : '';
+  $('recent-note').textContent = top ? `En son ünite: ${unitLabel(top)} · 90 saniyelik oyun, sadece seçilen ünitelerin kelimeleri.` : '';
 }
 
 /* Hatalarım listesi: şimdiye kadar yanlış eşleştirdiğin bütün kelimeler.
@@ -267,13 +273,15 @@ function startGame(mode, arg) {
   const topic = mode === 'topic' ? TOPICS[arg] : null;
   const p = topic ? topic.pool() : pool();
   if (p.length < 2) return;
-  G = { mode, secs: mode === 'timed' ? arg : 0, topicId: topic ? arg : null, store: topic ? topic.store() : db.cards,
+  const secs = mode === 'timed' ? arg : topic && topic.secs ? topic.secs : 0;
+  if (secs) mode = 'timed';
+  G = { mode, secs, topicId: topic ? arg : null, store: topic ? topic.store() : db.cards, poolFn: topic ? topic.pool : pool,
         L: Array(PAIRS).fill(null), R: Array(PAIRS).fill(null), sel: null, busy: false,
         score: 0, wrong: 0, combo: 0, bestCombo: 0, cleared: 0, wrongSet: new Map(), recent: [],
         usedThisGame: new Set(), deck: [], total: 0, start: 0, timer: null, over: false, lockedTap: false };
   if (mode === 'train') G.deck = buildTrainDeck(p);
   if (mode === 'mist') G.deck = buildMistDeck(p);
-  if (topic) G.deck = topic.deck(p);
+  if (topic && mode !== 'timed') G.deck = topic.deck(p);
   G.total = mode === 'timed' ? 0 : G.deck.filter(x => !x.filler).length;
   $('g-time').hidden = mode !== 'timed';
   $('g-prog').hidden = mode === 'timed';
@@ -318,7 +326,7 @@ function boardKeys(extra = []) {
 function fits(c, keys) { return !keys.es.has(c.es) && !keys.tr.has(norm(trOf(c))); }
 
 function nextTimed(keys) {
-  const p = pool();
+  const p = G.poolFn();
   const recent = new Set(G.recent.slice(-12));
   const score = c => c.mist ? 6 : isDue(c) ? 4 : !c.seen ? 2 : 1;
   let cands = p.filter(c => fits(c, keys) && !recent.has(c.es) && score(c) > 0);
@@ -487,10 +495,10 @@ function endGame() {
   let title, big, sub;
   const acc = G.score + G.wrong ? Math.round(100 * G.score / (G.score + G.wrong)) : 100;
   if (G.mode === 'timed') {
-    const k = String(G.secs), prev = db.records[k] ? db.records[k].best : 0;
+    const k = G.topicId ? recKey(G.topicId) : String(G.secs), prev = db.records[k] ? db.records[k].best : 0;
     const isRec = G.score > prev;
     if (isRec) db.records[k] = { best: G.score, date: todayStr() };
-    title = `${G.secs / 60} dakikalık oyun`;
+    title = G.topicId ? `${TOPICS[G.topicId].title} · ${G.secs} sn` : `${G.secs / 60} dakikalık oyun`;
     big = G.score;
     sub = (isRec ? `<span class="r-rec">Yeni rekor! 🏆</span>\n` : `Rekor: ${prev}\n`) +
           `Doğruluk %${acc} · En uzun seri ${G.bestCombo}`;
@@ -504,7 +512,7 @@ function endGame() {
   $('r-title').textContent = title;
   $('r-big').textContent = big;
   $('r-sub').innerHTML = sub;
-  const last = { mode: G.mode, arg: G.mode === 'topic' ? G.topicId : G.secs };
+  const last = G.topicId ? { mode: 'topic', arg: G.topicId } : { mode: G.mode, arg: G.secs };
   $('r-again').onclick = () => startGame(last.mode, last.arg);
   $('r-again').disabled = last.mode === 'mist' && !pool().some(c => c.mist);
   go('result');
@@ -674,7 +682,17 @@ function importWords(list) {
 function fmtDate(iso) {
   try { return new Date(iso).toLocaleString('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }); } catch { return iso; }
 }
+// üst çubuktaki küçük durum: son otomatik güncelleme ve Duolingo'daki yerin
+function headerSync(err) {
+  const el = $('hdr-sync'); const s = db.sync;
+  el.classList.toggle('warn', !s);
+  if (!s) { el.innerHTML = err ? 'Güncelleme alınamadı' : 'Otomatik güncelleme<br>henüz gelmedi'; return; }
+  const d = new Date(s.updated);
+  const when = isNaN(d) ? s.updated : d.toLocaleString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  el.innerHTML = `Güncellendi: <b>${when}</b>` + (s.lastUnit ? `<br>${s.lastUnit.sec}. Kısım ${s.lastUnit.no}. Ünite` : '');
+}
 function syncInfo(err) {
+  headerSync(err);
   const el = $('sync-info'); if (!el) return;
   const s = db.sync;
   if (!s) { el.textContent = err ? 'Kelime listesine ulaşılamadı. İnternet bağlantını kontrol et.' : 'Henüz senkron yapılmadı.'; return; }
@@ -687,6 +705,7 @@ async function autoSync(manual) {
   if (syncing) return; syncing = true;
   try {
     const r = await fetch(SYNC_URL + (SYNC_URL.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' });
+    if (r.status === 404) { syncInfo(false); if (manual) toast('Henüz otomatik güncelleme yok.'); return; } // words.json daha oluşmadı
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
     if (!Array.isArray(d.words)) throw new Error('biçim');
