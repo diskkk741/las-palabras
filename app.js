@@ -394,17 +394,15 @@ function startGame(mode, arg) {
   else { G.start = performance.now(); updateProg(); }
 }
 
+// Tur destesi: birkaç hata (tekrar etsin) → tekrar zamanı gelenler → hiç görülmemişler →
+// (hepsi görüldüyse) en uzun zamandır çalışılmayanlar. Az önce doğru bildiğin kelime, görülmemiş kelime
+// kaldıkça bir sonraki turda tekrar gelmez.
 function buildTrainDeck(p) {
+  const mist = shuffle(p.filter(c => c.mist)).slice(0, 6);
   const due = shuffle(p.filter(c => isDue(c) && !c.mist));
-  const mist = shuffle(p.filter(c => c.mist));
-  const fresh = shuffle(p.filter(c => !c.seen)).slice(0, 8);
-  let picks = [...mist.slice(0, 6), ...due, ...fresh];
-  picks = [...new Map(picks.map(c => [c.es, c])).values()].slice(0, TRAIN_SIZE);
-  if (picks.length < TRAIN_SIZE) {                // eksikse en zayıf kutulardan tamamla
-    const rest = shuffle(p.filter(c => c.seen && !picks.includes(c))).sort((a, b) => a.box - b.box);
-    picks.push(...rest.slice(0, TRAIN_SIZE - picks.length));
-  }
-  if (picks.length < TRAIN_SIZE) picks.push(...shuffle(p.filter(c => !picks.includes(c))).slice(0, TRAIN_SIZE - picks.length));
+  const fresh = shuffle(p.filter(c => !c.seen));
+  const rest = shuffle(p.filter(c => c.seen && !c.mist && !isDue(c))).sort((a, b) => (a.mod || 0) - (b.mod || 0));
+  const picks = [...new Map([...mist, ...due, ...fresh, ...rest].map(c => [c.es, c])).values()].slice(0, TRAIN_SIZE);
   return shuffle(picks).map(c => ({ es: c.es, filler: false }));
 }
 function buildMistDeck(p) {
