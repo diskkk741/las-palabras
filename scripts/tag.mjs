@@ -1,5 +1,6 @@
-// Yeni kelimeleri yapay zekâyla etiketler ve örnek cümle üretir (GitHub Models, ücretsiz;
-// GITHUB_TOKEN + workflow'da "models: read" izni).
+// Yeni kelimeleri yapay zekâyla etiketler ve örnek cümle üretir: Google Gemini API, ücretsiz katman.
+// Gerekli: GEMINI_API_KEY (aistudio.google.com'dan alınır, repo secret olarak saklanır).
+// Kullanılacak model her çalıştırmada Google'a sorulur (ücretsiz "flash-lite" öncelikli); biri kapanırsa sıradakine geçer.
 //  1) words.json'da olup tags.json'da olmayan kelimeler → tags.json:
 //       t: kelime türü (RAE kısaltması)   l: çekimli fiilse mastarı   b: düzgün Türkçe karşılık
 //     ve examples.json: [kısa İspanyolca örnek cümle, Türkçesi]
@@ -10,12 +11,12 @@
 import { readFile, writeFile } from 'node:fs/promises';
 
 const ROOT = new URL('../', import.meta.url);
-const ENDPOINT = process.env.MODELS_URL || 'https://models.github.ai/inference/chat/completions';
-const MODELS = (process.env.MODELS || 'openai/gpt-4.1-mini,openai/gpt-4o-mini,openai/gpt-4o').split(',');
+const API = process.env.GEMINI_URL || 'https://generativelanguage.googleapis.com/v1beta';
+const FORCE_MODELS = process.env.MODELS ? process.env.MODELS.split(',') : null;
 const BATCH = 25;
 const MAX_TAG = 300;
 const MAX_EX = +(process.env.MAX_EX || 300);
-const PAUSE = +(process.env.PAUSE_MS ?? 4000);      // ücretsiz katmanın dakika sınırına takılmamak için
+const PAUSE = +(process.env.PAUSE_MS ?? 6000);      // ücretsiz katmanın dakika sınırına (~10–15/dk) takılmamak için
 
 export const ALLOWED = new Set(['m.', 'f.', 'm./f.', 'm. pl.', 'f. pl.', 'adj.', 'v.', 'v. prnl.', 'part.', 'adv.',
   'prep.', 'conj.', 'pron.', 'det.', 'art.', 'contr.', 'num.', 'interr.', 'interj.', 'loc.']);
@@ -67,43 +68,68 @@ function parseJSON(text) {
   return null;
 }
 
-let preferred = null; // bir kez çalışan model sonraki gruplarda önce denenir
-export async function ask(system, payload, { token, fetchImpl = fetch, log = console.log } = {}) {
+// Uygun modelleri bul: generateContent destekleyen, "flash" içeren, deneysel olmayan; en yeni flash-lite önce.
+export async function pickModels({ key, fetchImpl = fetch } = {}) {
+  if (FORCE_MODELS) return FORCE_MODELS;
+  const r = await fetchImpl(`${API}/models?pageSize=200`, { headers: { 'x-goog-api-key': key } });
+  const text = await r.text();
+  let j; try { j = JSON.parse(text); } catch { throw new Error(`model listesi alınamadı (HTTP ${r.status}): ${text.slice(0, 120)}`); }
+  if (!r.ok) throw new Error(`model listesi: HTTP ${r.status} ${j.error?.message || ''}`);
+  const ver = n => (n.match(/gemini-(\d+(?:\.\d+)?)/) || [0, 0])[1] * 1;
+  const names = (j.models || [])
+    .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
+    .map(m => m.name.replace(/^models\//, ''))
+    .filter(n => /^gemini-[\d.]+-flash/.test(n) && !/(exp|tts|image|live|audio|thinking|embedding)/.test(n));
+  const rank = n => (n.includes('lite') ? 0 : 1) * 10 + (n.includes('preview') ? 5 : 0);
+  return names.sort((a, b) => rank(a) - rank(b) || ver(b) - ver(a)).slice(0, 4);
+}
+
+let MODELS = null, preferred = null; // bir kez çalışan model sonraki gruplarda önce denenir
+export async function ask(system, payload, { key, fetchImpl = fetch, log = console.log } = {}) {
+  if (!MODELS) { MODELS = await pickModels({ key, fetchImpl }); log(`Modeller: ${MODELS.join(', ') || '-'}`); }
+  if (!MODELS.length) throw new Error('uygun ücretsiz model bulunamadı');
   const order = preferred ? [preferred, ...MODELS.filter(m => m !== preferred)] : MODELS;
-  const user = JSON.stringify(payload);
+  const body = JSON.stringify({
+    systemInstruction: { parts: [{ text: system }] },
+    contents: [{ role: 'user', parts: [{ text: JSON.stringify(payload) }] }],
+    generationConfig: { temperature: 0.2, responseMimeType: 'application/json' },
+  });
   let lastErr;
   for (const model of order) {
     for (let attempt = 1; attempt <= 3; attempt++) {
-      const r = await fetchImpl(ENDPOINT, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ model, temperature: 0.2, response_format: { type: 'json_object' },
-          messages: [{ role: 'system', content: system }, { role: 'user', content: user }] }),
-      });
+      const r = await fetchImpl(`${API}/models/${model}:generateContent`, {
+        method: 'POST', headers: { 'x-goog-api-key': key, 'Content-Type': 'application/json' }, body });
+      const text = await r.text();
       if (r.ok) {
-        const j = await r.json();
-        const data = parseJSON(j.choices?.[0]?.message?.content || '');
+        let j = null; try { j = JSON.parse(text); } catch {}
+        const out = j?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
+        const data = parseJSON(out);
         if (data && Array.isArray(data.items)) { preferred = model; return { model, items: data.items }; }
-        lastErr = new Error(`${model}: geçersiz JSON`);
+        lastErr = new Error(`${model}: beklenmeyen cevap: ${(out || text).slice(0, 120)}`);
         break;
       }
-      lastErr = new Error(`${model}: HTTP ${r.status} ${(await r.text()).slice(0, 200)}`);
-      if (r.status === 429 || r.status >= 500) { await new Promise(s => setTimeout(s, 15000 * attempt)); continue; }
-      break; // 400/401/403/404: bu model olmuyor, sıradakini dene
+      lastErr = new Error(`${model}: HTTP ${r.status} ${text.slice(0, 160)}`);
+      if (r.status === 429 || r.status >= 500) { await new Promise(s => setTimeout(s, 20000 * attempt)); continue; }
+      break; // 400/403/404: bu model olmuyor, sıradakini dene
     }
     log(`uyarı: ${lastErr.message}`);
   }
   throw lastErr;
 }
+function byWord(items, batch) {
+  const m = new Map(items.filter(x => x && x.es).map(x => [x.es, x]));
+  if (!m.size && items.length === batch.length) batch.forEach((w, i) => m.set(w.es, { ...items[i], es: w.es }));
+  return m;
+}
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-export async function run({ token, fetchImpl, log = console.log } = {}) {
+export async function run({ key, fetchImpl, log = console.log } = {}) {
   const words = JSON.parse(await readFile(new URL('words.json', ROOT), 'utf8')).words;
   const tagsPath = new URL('tags.json', ROOT), exPath = new URL('examples.json', ROOT);
   const tags = JSON.parse(await readFile(tagsPath, 'utf8'));
   let ex = {}; try { ex = JSON.parse(await readFile(exPath, 'utf8')); } catch {}
   const all = words.map(w => ({ es: w[0], tr: (tags[w[0]] && tags[w[0]].b) || w[1], alt: w[2], unit: w[5] }));
-  const opt = { token, fetchImpl, log };
+  const opt = { key, fetchImpl, log };
   let tagged = 0, exAdded = 0, skipped = 0, failed = false;
 
   // 1) etiketsiz kelimeler: etiket + örnek
@@ -113,7 +139,7 @@ export async function run({ token, fetchImpl, log = console.log } = {}) {
     const batch = todo.slice(i, i + BATCH);
     try {
       const res = await ask(SYSTEM_TAG, batch.map(w => ({ es: w.es, duolingo: w.tr, alternatifler: w.alt || '', unite: w.unit || '' })), opt);
-      const byEs = new Map(res.items.filter(x => x && x.es).map(x => [x.es, x]));
+      const byEs = byWord(res.items, batch);
       for (const w of batch) {
         const v = validate(byEs.get(w.es), w);
         if (v) { tags[w.es] = v; tagged++; } else skipped++;
@@ -132,7 +158,7 @@ export async function run({ token, fetchImpl, log = console.log } = {}) {
     const batch = exTodo.slice(i, i + BATCH);
     try {
       const res = await ask(SYSTEM_EX, batch.map(w => ({ es: w.es, anlam: w.tr })), opt);
-      const byEs = new Map(res.items.filter(x => x && x.es).map(x => [x.es, x]));
+      const byEs = byWord(res.items, batch);
       for (const w of batch) { const e = validateEx(byEs.get(w.es), w); if (e) { ex[w.es] = e; exAdded++; } }
       log(`[${res.model}] örnek ${Math.min(i + BATCH, exTodo.length)}/${exTodo.length}`);
     } catch (e) { log(`::warning::Örnek cümle yazılamadı: ${e.message}`); failed = true; break; }
@@ -146,7 +172,7 @@ export async function run({ token, fetchImpl, log = console.log } = {}) {
 }
 
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())) {
-  const token = (process.env.GITHUB_TOKEN || '').trim();
-  if (!token) { console.log('::warning::GITHUB_TOKEN yok, etiketleme atlandı.'); process.exit(0); }
-  await run({ token });
+  const key = (process.env.GEMINI_API_KEY || '').trim();
+  if (!key) { console.log('::warning::GEMINI_API_KEY tanımlı değil; etiketleme ve örnek cümleler atlandı.'); process.exit(0); }
+  await run({ key });
 }
