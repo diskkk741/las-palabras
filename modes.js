@@ -46,10 +46,13 @@ function buildListen() {
   const audio = cards.filter(c => c.audio);
   if (audio.length >= 40) cards = audio;                       // Duolingo kaydı olanlar öncelikli
   const st = es => db.listen[es] || {};
-  const mist = shuffle(cards.filter(c => st(c.es).mist)).slice(0, 8);
-  const unseen = shuffle(cards.filter(c => !st(c.es).ok && !st(c.es).mist));
-  const rest = shuffle(cards.filter(c => st(c.es).ok && !st(c.es).mist));
-  const picks = [...new Map([...mist, ...unseen.slice(0, 8), ...rest, ...unseen].map(c => [c.es, c])).values()].slice(0, MC_SIZE);
+  // sıra: birkaç hata (tekrar etsin) → hiç sorulmamış kelimeler → (hepsi sorulduysa) en uzun zamandır sorulmayanlar.
+  // Doğru bilinen kelimeler, sorulmamış kelime kaldıkça tekrar gelmez.
+  const mist = shuffle(cards.filter(c => st(c.es).mist)).slice(0, 5);
+  const unseen = shuffle(cards.filter(c => !db.listen[c.es]));
+  const rest = cards.filter(c => db.listen[c.es] && !st(c.es).mist)
+    .sort((a, b) => (st(a.es).mod || 0) - (st(b.es).mod || 0));
+  const picks = [...new Map([...mist, ...unseen, ...rest].map(c => [c.es, c])).values()].slice(0, MC_SIZE);
   return shuffle(picks).map(c => {
     const right = trOf(c), g = posGroup(c);
     const used = new Set([norm(right)]);
