@@ -116,6 +116,7 @@ function mcShow() {
     slow.onclick = () => speak(q.key, true, true);
     box.append(play, slow);
     speak(q.key, true);
+    preloadAudio(M.qs.slice(M.i + 1, M.i + 4).filter(x => x.kind === 'listen').map(x => x.key));   // sıradaki sorular hazır olsun
   } else {
     const v = document.createElement('div'); v.className = 'verb'; v.textContent = q.verb;
     const card = db.cards[q.verb];
@@ -127,7 +128,8 @@ function mcShow() {
   const opts = $('mc-opts'); opts.innerHTML = '';
   for (const o of q.opts) {
     const b = document.createElement('button'); b.textContent = o;
-    b.onclick = () => mcAnswer(b, o);
+    b.onpointerdown = e => { if (e.button > 0) return; e.preventDefault(); mcAnswer(b, o); };
+    b.onclick = e => { if (e.detail === 0) mcAnswer(b, o); };
     opts.appendChild(b);
   }
 }

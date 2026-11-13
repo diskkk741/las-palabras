@@ -32,11 +32,21 @@ function load() {
   db.listen = db.listen || {}; db.conj = db.conj || {};
   db.stats = db.stats || {};
 }
-function save() {
+/* Kayıt ertelenir: tüm veri (~850 KB) her dokunuşta yazılınca ana iş parçacığı 40–70 ms donuyordu.
+   Artık değişiklikler toplanır, 1,5 sn sessizlikte ya da uygulama arka plana geçerken tek seferde yazılır. */
+let saveTimer = 0;
+function saveNow() {
+  clearTimeout(saveTimer); saveTimer = 0;
   try { localStorage.setItem(KEY, JSON.stringify(db)); }
   catch { alert('Kaydedilemedi: depolama dolu olabilir. Ayarlar → Yedeği indir.'); }
+}
+function save() {
+  clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 1500);
   if (typeof window.onSaved === 'function') window.onSaved();   // bulut yedeği (modes.js)
 }
+const flushSave = () => { if (saveTimer) saveNow(); };
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSave(); });
+window.addEventListener('pagehide', flushSave);
 
 /* ---------------- istatistik ----------------
    Gün başına doğru cevap sayısı, cihaz bazında (bulut yedeğinde cihazlar toplanır). */
@@ -268,13 +278,33 @@ function tts(text, rate = 0.9) {
   speechSynthesis.speak(u);
 }
 function audioFor(text) { const c = db.cards[text]; return c && c.audio ? c.audio : ''; }
+/* Sesler önceden yüklenir: ekrana gelen her kelimenin kaydı için ayrı, hazır bir <audio> tutulur.
+   Eskiden ses dosyası ancak dokununca indirilmeye başlıyordu (her seferinde ağ gecikmesi). */
+const AUDS = new Map();   // url → hazır <audio>, en yeni sonda
+function audioEl(url) {
+  let a = AUDS.get(url);
+  if (a) { AUDS.delete(url); AUDS.set(url, a); return a; }
+  a = new Audio(); a.preload = 'auto'; a.setAttribute('playsinline', ''); a.src = url;
+  try { a.load(); } catch {}
+  AUDS.set(url, a);
+  if (AUDS.size > 40) { const [old, el] = AUDS.entries().next().value; el.removeAttribute('src'); AUDS.delete(old); }
+  return a;
+}
+function preloadAudio(texts) {
+  if (!AUD) return;
+  for (const t of texts) { const u = t && audioFor(t); if (u) audioEl(u); }
+}
+let playing = null;
 function speak(text, force, slow) {
   if (!force && db.opts.tts !== '1') return;
   const url = audioFor(text);
   if (url && AUD) {
     try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch {}
-    AUD.pause(); AUD.src = url; AUD.playbackRate = slow ? 0.7 : 1;
-    const p = AUD.play(); if (p && p.catch) p.catch(() => tts(text, slow ? 0.6 : 0.9));
+    if (playing) { try { playing.pause(); } catch {} }
+    const a = audioEl(url); playing = a;
+    a.playbackRate = slow ? 0.7 : 1;
+    try { a.currentTime = 0; } catch {}
+    const p = a.play(); if (p && p.catch) p.catch(() => tts(text, slow ? 0.6 : 0.9));
     return;
   }
   tts(text, slow ? 0.6 : 0.9);
@@ -489,7 +519,9 @@ function render(all) {
     for (let i = 0; i < PAIRS; i++) for (const side of ['L', 'R']) {
       const b = document.createElement('button');
       b.className = 'slot'; b.dataset.side = side; b.dataset.i = i;
-      b.onclick = () => tap(side, i);
+      // parmak ekrana değdiği an tepki ver (click, parmak kalkınca gelir); klavye için click yedekte
+      b.onpointerdown = e => { if (e.button > 0) return; e.preventDefault(); tap(side, i); };
+      b.onclick = e => { if (e.detail === 0) tap(side, i); };
       board.appendChild(b);
     }
   }
@@ -510,6 +542,7 @@ function render(all) {
     if (G.sel && G.sel.side === side && G.sel.i === i) el.classList.add('sel');
   }
   G.fresh = new Set();
+  preloadAudio(G.L);
 }
 const slotEl = (side, i) => $('board').querySelector(`[data-side="${side}"][data-i="${i}"]`);
 
