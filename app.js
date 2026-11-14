@@ -278,36 +278,57 @@ function tts(text, rate = 0.9) {
   speechSynthesis.speak(u);
 }
 function audioFor(text) { const c = db.cards[text]; return c && c.audio ? c.audio : ''; }
-/* Sesler önceden yüklenir: ekrana gelen her kelimenin kaydı için ayrı, hazır bir <audio> tutulur.
-   Eskiden ses dosyası ancak dokununca indirilmeye başlıyordu (her seferinde ağ gecikmesi). */
-const AUDS = new Map();   // url → hazır <audio>, en yeni sonda
-function audioEl(url) {
-  let a = AUDS.get(url);
-  if (a) { AUDS.delete(url); AUDS.set(url, a); return a; }
-  a = new Audio(); a.preload = 'auto'; a.setAttribute('playsinline', ''); a.src = url;
-  try { a.load(); } catch {}
-  AUDS.set(url, a);
-  if (AUDS.size > 40) { const [old, el] = AUDS.entries().next().value; el.removeAttribute('src'); AUDS.delete(old); }
-  return a;
+/* Ses çalma, iki yol:
+   1) Web Audio (asıl yol): kelime tahtaya gelince kaydı indirilip çözülür ve bellekte hazır bekler;
+      dokununca start() ile milisaniyeler içinde çalar. iPhone'da <audio>.play() ayrıca 150–400 ms
+      başlama gecikmesi taşıyor, ayrıca iOS önceden yüklemeyi (preload) çoğu zaman yok sayıyor.
+      Sessiz modda da duyulması navigator.audioSession = 'playback' sayesinde (iOS 17+).
+   2) Kayıt henüz hazır değilse, indirilemiyorsa ya da yavaş dinlemede: eski <audio> yolu. */
+const AC = window.AudioContext || window.webkitAudioContext;
+const WEB_AUDIO = !!AC && (!/iPhone|iPad|iPod/.test(navigator.userAgent) || !!navigator.audioSession);   // eski iOS'ta sessiz mod için <audio>
+let actx = null;
+const ctx = () => actx || (actx = new AC());
+const BUF = new Map();     // url → AudioBuffer | null (null = indirilemedi) ; en yeni sonda
+const LOADING = new Set();
+function loadBuf(url) {
+  if (!WEB_AUDIO || BUF.has(url) || LOADING.has(url)) return;
+  LOADING.add(url);
+  fetch(url, { mode: 'cors' })
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+    .then(ab => new Promise((res, rej) => ctx().decodeAudioData(ab, res, rej)))
+    .then(b => BUF.set(url, b), () => BUF.set(url, null))
+    .finally(() => {
+      LOADING.delete(url);
+      while (BUF.size > 120) BUF.delete(BUF.keys().next().value);
+    });
 }
+// iOS ses bağlamını ancak bir dokunuş sırasında açar: ilk dokunuşta aç, sonra açık kalır
+function unlockAudio() { if (!WEB_AUDIO) return; const c = ctx(); if (c.state !== 'running') c.resume().catch(() => {}); }
+['pointerdown', 'touchend', 'click'].forEach(t => document.addEventListener(t, unlockAudio, { capture: true, passive: true }));
 function preloadAudio(texts) {
-  if (!AUD) return;
-  for (const t of texts) { const u = t && audioFor(t); if (u) audioEl(u); }
+  for (const t of texts) { const u = t && audioFor(t); if (u) loadBuf(u); }
 }
-let playing = null;
+let playingSrc = null;
+function stopAll() {
+  if (playingSrc) { try { playingSrc.stop(); } catch {} playingSrc = null; }
+  if (AUD && !AUD.paused) AUD.pause();
+  try { if ('speechSynthesis' in window && speechSynthesis.speaking) speechSynthesis.cancel(); } catch {}
+}
 function speak(text, force, slow) {
   if (!force && db.opts.tts !== '1') return;
   const url = audioFor(text);
-  if (url && AUD) {
-    try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch {}
-    if (playing) { try { playing.pause(); } catch {} }
-    const a = audioEl(url); playing = a;
-    a.playbackRate = slow ? 0.7 : 1;
-    try { a.currentTime = 0; } catch {}
-    const p = a.play(); if (p && p.catch) p.catch(() => tts(text, slow ? 0.6 : 0.9));
+  if (!url || !AUD) { stopAll(); tts(text, slow ? 0.6 : 0.9); return; }
+  stopAll();
+  const buf = BUF.get(url);
+  if (buf && !slow) {
+    const c = ctx(); if (c.state !== 'running') c.resume().catch(() => {});
+    const src = c.createBufferSource(); src.buffer = buf; src.connect(c.destination); src.start(0);
+    playingSrc = src;
     return;
   }
-  tts(text, slow ? 0.6 : 0.9);
+  loadBuf(url);   // bir dahaki sefere hazır olsun
+  AUD.src = url; AUD.playbackRate = slow ? 0.7 : 1;
+  const p = AUD.play(); if (p && p.catch) p.catch(() => tts(text, slow ? 0.6 : 0.9));
 }
 
 /* ---------------- navigasyon ---------------- */
@@ -530,16 +551,19 @@ function render(all) {
     const id = side + i;
     el.classList.remove('sel', 'ok', 'bad', 'gone');
     el.classList.toggle('empty', !k);
-    if (!k) { el.textContent = ''; continue; }
+    const isFresh = G.fresh && G.fresh.has(id);
+    if (!k) { if (el.dataset.k) { el.textContent = ''; el.dataset.k = ''; } continue; }
+    if (G.sel && G.sel.side === side && G.sel.i === i) el.classList.add('sel');
+    if (el.dataset.k === k && !all && !isFresh) continue;      // değişmeyen kartı yeniden yazma
+    el.dataset.k = k;
     const c = G.store[k];
-    if (G.fresh && G.fresh.has(id)) { el.classList.remove('enter'); void el.offsetWidth; el.classList.add('enter'); }
+    if (isFresh) { el.classList.remove('enter'); requestAnimationFrame(() => el.classList.add('enter')); }
     if (side === 'L') {
       const shown = disp(c); el.textContent = shown; fit(el, shown);
       // fiillerde mastar da görünür: quiero → v. (querer)
       const t = db.opts.tags === '1' ? tagOf(c) : '';
       if (t) { const s = document.createElement('span'); s.className = 'tg'; s.textContent = t; el.appendChild(s); }
     } else { const t = trOf(c); el.textContent = t; fit(el, t); }
-    if (G.sel && G.sel.side === side && G.sel.i === i) el.classList.add('sel');
   }
   G.fresh = new Set();
   preloadAudio(G.L);
@@ -549,14 +573,15 @@ const slotEl = (side, i) => $('board').querySelector(`[data-side="${side}"][data
 function tap(side, i) {
   if (!G || G.over || G.lockedTap || !G[side][i]) return;
   if (G.mode === 'timed' && !G.start) return;
-  if (side === 'L') speak(G.L[i]);
   if (!G.sel || G.sel.side === side) {
     if (G.sel && G.sel.side === side && G.sel.i === i) { G.sel = null; }
     else G.sel = { side, i };
     document.querySelectorAll('.slot.sel').forEach(e => e.classList.remove('sel'));
     if (G.sel) slotEl(side, i).classList.add('sel');
+    if (side === 'L') speak(G.L[i]);
     return;
   }
+  if (side === 'L') speak(G.L[i]);
   const a = G.sel, b = { side, i };
   G.sel = null;
   const li = a.side === 'L' ? a.i : b.i, ri = a.side === 'R' ? a.i : b.i;
@@ -588,8 +613,8 @@ function match(li, ri, eL, eR) {
       render(false);
       updateProg();
       checkEnd();
-    }, 160);
-  }, 220);
+    }, 140);
+  }, 170);
 }
 function miss(lk, rk, eL, eR) {
   G.wrong++; G.combo = 0; $('g-combo').textContent = '';
